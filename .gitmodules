@@ -1,0 +1,3 @@
+[submodule "yak"]
+	path = yak
+	url = git@github.com:lh3/yak.git

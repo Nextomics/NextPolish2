@@ -1,0 +1,26 @@
+[package]
+name = "nextPolish2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.0.22", features = ["string"] }
+crossbeam-channel = "0.5.6"
+crossbeam-utils = "0.8.11"
+ctor = "0.1.23"
+fxhash = "0.2.1"
+kseq = "0.5.0"
+lazy_static = "1.4.0"
+libc = "0.2.135"
+libc-stdhandle = "0.1.0"
+ordered-float = "3.4.0"
+path-absolutize = "3.0.14"
+rust-htslib = "0.39.5"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.5"
+
+[profile.release]
+panic = 'abort'
