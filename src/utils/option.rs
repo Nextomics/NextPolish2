@@ -63,7 +63,7 @@ impl Option {
                     .value_parser(to_abspath_string)
                     .required(true)
                     .action(ArgAction::Append)
-                    .help("one or more k-mer dump files in yak format."),
+                    .help("one or more k-mer databases in yak format."),
             )
             .arg(
                 Arg::new("out")
