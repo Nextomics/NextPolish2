@@ -63,6 +63,8 @@ samtools index hifi.map.sort.bam
 ./target/release/nextPolish2 -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k51.yak > asm.np2.fa
 ```
 
+***Note:*** If your genome is assembled via trio binning. You can set `--model ref`, which means NextPolish2 will output the same haplotype phase blocks as the reference, otherwise it will preferentially output longer haplotype phase blocks. In addition, you can discard reads that have different haplotype with the reference during the mapping procedure, which usually produces a better result.
+
 #### More options
 
 Use `./target/release/nextPolish2 -h` to see options.
@@ -92,7 +94,8 @@ NextPolish2 is only freely available for academic use and other non-commercial u
 
 ### <a name="limit"></a>Limitations
 
-Coming soon...
+1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), NextPolish2 will output original bases, in this case, the results can be optimized by adjusting the mapping parameters.
+2. NextPolish2 can only fix some structural misassemblies.
 
 ### <a name="benchmark"></a>Benchmarking
 
