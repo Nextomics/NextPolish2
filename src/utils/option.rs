@@ -28,8 +28,9 @@ pub struct Option {
     pub min_map_qual: i16,       //-q // user may set this as -1
     pub min_map_len: usize,      //-a
     pub min_map_fra: f32,        //-a
-    pub min_base_cov: usize,     //-b
     pub max_clip_len: u32,       //-c
+    pub min_base_cov: usize,
+    pub select_by_count: bool,
 }
 
 impl Option {
@@ -188,12 +189,20 @@ impl Option {
             .arg(
                 Arg::new("min_base_cov")
                     .long("min_base_cov")
-                    .short('b')
                     .value_name("INT")
                     .default_value(opt.min_base_cov.to_string())
                     .value_parser(value_parser!(usize))
                     .help("minimum depth to correct a raw base.")
-                    .hide(true),
+                    .hide_short_help(true),
+            )
+            .arg(
+                Arg::new("select_by_count")
+                    .long("select_by_count")
+                    .hide_short_help(true)
+                    .help("select the kmer with the most count as the correct kmer if all kmers at a position \n\
+                        do not exist in kmer databases, this could potentially induce overcorrections.\n\
+                        Keep the reference sequence unchanged by default.")
+                    .action(ArgAction::SetTrue),
             )
             .get_matches();
 
@@ -226,6 +235,7 @@ impl Option {
             min_map_qual: args.remove_one::<i16>("min_map_qual").unwrap(),
             max_clip_len: args.remove_one::<u32>("max_clip_len").unwrap(),
             min_base_cov: args.remove_one::<usize>("min_base_cov").unwrap(),
+            select_by_count: args.get_flag("select_by_count"),
         }
     }
 }
@@ -250,6 +260,7 @@ impl Default for Option {
             min_map_qual: 1,
             max_clip_len: 100,
             min_base_cov: 1,
+            select_by_count: false,
         }
     }
 }
