@@ -131,7 +131,7 @@ fn yak_hash64_64(key: u64) -> u64 {
 
 fn yak_hash_long(x: [u64; 4]) -> u64 {
     let j = if x[1] < x[3] {0} else {1};
-    return yak_hash64_64(x[j << 1 | 0]) + yak_hash64_64(x[ j << 1 | 1]);
+    yak_hash64_64(x[j << 1]) + yak_hash64_64(x[ j << 1 | 1])
 }
 
 pub fn seq2kmer(seq: &str, ksize: usize) -> impl Iterator<Item = u64> + '_ {
