@@ -18,7 +18,7 @@ pub struct Option {
     pub fa: String,
     pub model: String,           //-m
     pub uppercase: bool,         //-u
-    pub out_pos: bool,           //-p
+    pub out_pos: bool,           
     pub min_kmer_count: u16,     //-k
     pub thread: usize,           //-t
     pub iter_count: usize,       //-i
@@ -90,8 +90,8 @@ impl Option {
                     .default_value(&opt.model)
                     .help("phasing model.")
                     .value_parser([
-                        PossibleValue::new("ref").help("as ref"),
-                        PossibleValue::new("len").help("block size"),
+                        PossibleValue::new("ref").help("output the same haplotype phase blocks as the reference"),
+                        PossibleValue::new("len").help("output longer haplotype phase blocks"),
                     ]),
             )
             .arg(
@@ -103,9 +103,9 @@ impl Option {
             )
             .arg(
                 Arg::new("out_pos")
-                    .short('p')
                     .long("out_pos")
                     .help("output each base and its position.")
+                    .hide_short_help(true)
                     .action(ArgAction::SetTrue),
             )
             .arg(
@@ -115,7 +115,7 @@ impl Option {
                     .value_name("INT")
                     .default_value(opt.min_kmer_count.to_string())
                     .value_parser(value_parser!(u16))
-                    .help("filter kmers in yak file with count <= INT."),
+                    .help("filter kmers in k-mer databases with count <= INT."),
             )
             .arg(
                 Arg::new("thread")
@@ -193,7 +193,7 @@ impl Option {
                     .default_value(opt.min_base_cov.to_string())
                     .value_parser(value_parser!(usize))
                     .help("minimum depth to correct a raw base.")
-                    .hide_short_help(true),
+                    .hide(true),
             )
             .arg(
                 Arg::new("select_by_count")
@@ -249,7 +249,7 @@ impl Default for Option {
             model: "len".to_string(),
             uppercase: false,
             out_pos: false,
-            min_kmer_count: 1,
+            min_kmer_count: 0,
             thread: 1,
             iter_count: 2,
             min_read_len: 1000,
