@@ -12,7 +12,7 @@ use std::iter::zip;
 
 mod utils;
 use utils::{
-    kmer::{iter2kmer, kmer2seq, KmerInfo, SEQ_NUM},
+    kmer::{iter2kmer, KmerInfo, SEQ_NUM},
     louvain::{assign_data, insert_data, new_data, phase_communities},
     option::Option as Opt,
     resource::resource_str,
@@ -639,7 +639,6 @@ struct LqSeq {
     order: u32,
     kscore: u16,
     kmer: u64,   // 0 means not a valid kmer
-    _debug: u64, //TODO remove this field, for debug
     seq: String,
 }
 
@@ -659,7 +658,6 @@ struct LqSeqs {
 
 impl fmt::Display for LqSeqs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ksize = 21; //here ksize should be kmer_info.ksize
         writeln!(
             f,
             "start:{} end:{} SUCC:{}|HETE:{}|RECH:{} sudoseed: {} {}",
@@ -674,10 +672,9 @@ impl fmt::Display for LqSeqs {
         for seq in &self.seqs {
             writeln!(
                 f,
-                "order:{} kscore:{} kmer:{} seqlen:{} seq:{}",
+                "order:{} kscore:{} seqlen:{} seq:{}",
                 seq.order,
                 seq.kscore,
-                kmer2seq(seq._debug, ksize),
                 seq.seq.len(),
                 seq.seq
             )?;
@@ -1234,13 +1231,12 @@ fn generate_lqseqs_from_tags_kmer(
                     } else {
                         INVALID_KMER
                     },
-                    _debug: kmer,
                     seq,
                 });
             }
         }
     }
-
+    
     retrieve_kmer_count(&mut lqseqs, kmer_info, opt.min_kmer_count);
     // display_lqseqs_vec(&lqseqs);
     if out_cns{
