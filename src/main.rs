@@ -770,31 +770,6 @@ fn retrieve_kmer_count(lqseqs: &mut [LqSeqs], kmer_info: &KmerInfo, min_kmer_cou
     }
 }
 
-fn get_most1_frequent_lqseqs(lqseq: &LqSeqs, min_kscore: u16) -> usize {
-    let mut max_c = 0;
-    let mut max_p = 0;
-    let mut checked_index = [false; LQSEQ_MAX_CAN_COUNT];
-
-    for (p1, seq1) in lqseq.seqs.iter().enumerate() {
-        if checked_index[p1] || seq1.kscore < min_kscore {
-            continue;
-        }
-        let mut c = 0;
-        for (p2, seq2) in lqseq.seqs[p1 + 1..].iter().enumerate() {
-            if seq1.seq == seq2.seq {
-                c += 1;
-                checked_index[p1 + p2 + 1] = true;
-            }
-        }
-
-        if c > max_c || (c == max_c && seq1.order == 0) {
-            max_c = c;
-            max_p = p1;
-        }
-    }
-    max_p
-}
-
 fn is_valid_snp(seq1: &[u8], seq2: &[u8]) -> bool {
     let mut i = 0;
     let mut j = 0;
@@ -863,93 +838,69 @@ fn fill_order_stat(lqseq: &LqSeqs, stats: &mut[usize], order_stat: &mut HashMap<
     (max1_c, max1_p, max2_c, max2_p)
 }
 
-fn mark_lable_lqseqs(lqseqs: &mut [LqSeqs], ref_prefer: bool) {
+fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs], select_by_count: bool) {
     let mut stats = [0; LQSEQ_MAX_CAN_COUNT];
     let mut order_stat = HashMap::default();
 
     for lqseq in lqseqs.iter_mut() {
-        let (max1_c, max1_p, max2_c, max2_p) = fill_order_stat(&lqseq, &mut stats, &mut order_stat);
+        let (max1_c, max1_p, _, _) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
+        lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
+        lqseq.set_lable(LQSEQS_LABLE_SUCC);
+
+        lqseq.set_lable(LQSEQS_LABLE_RECH); //this lqseq need do be re-check
         let min_c = get_min_count(lqseq.seqs.len());
-
-        // for ultra-short reference, the sequence alignment is usually not accurate, so kmer on ref is preferred selected.
-        if ref_prefer {
+        
+        if !select_by_count  {
             assert_eq!(lqseq.seqs[0].order, 0, "the first lqseq is not ref.");
-            if lqseq.seqs[0].kscore > 0 {//ref kmer is valid
-                *order_stat.get_mut(&0).unwrap() = LQSEQ_MAX_CAN_COUNT;
-                lqseq.sudoseed = lqseq.seqs[0].seq.to_owned();
-            }else {
-                lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
-            }
-            lqseq.set_lable(LQSEQS_LABLE_RECH);
-            lqseq.set_lable(LQSEQS_LABLE_SUCC);
-            lqseq.retain_sort_seqs(&order_stat, 1);
-
-        // 2 or more genotypes, for low depth regions, we do not consider heter. indels
-        }else if max2_c >= min_c
-            && (lqseq.seqs.len() >= 6
-                || lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len())
-        {
-            if is_valid_snp(
-                lqseq.seqs[max1_p].seq.as_bytes(),
-                lqseq.seqs[max2_p].seq.as_bytes(),
-            ) {
-                // println!("lqseq {} {} \n{}\n{}\n",lqseq.start, lqseq.end, lqseq.seqs[max1_p].seq, lqseq.seqs[max2_p].seq);
-                lqseq.set_lable(LQSEQS_LABLE_HETE);
-                
-                for (p, seq) in lqseq
-                    .seqs
-                    .iter_mut()
-                    .enumerate()
-                    .filter(|(_, v)| v.kscore > 0)
-                {
-                    if stats[p] < min_c {
-                        seq.kscore = 0;
-                    }
+            
+            // make sure the lqseq from ref will be saved, here *v/c > 1 is to avoid switch err.
+            if let Some(v) = order_stat.get_mut(&0) {
+                if *v > 1 && *v < min_c{
+                    *v = min_c;
                 }
-            } else {
-                lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
-                lqseq.set_lable(LQSEQS_LABLE_SUCC);
-                lqseq.set_lable(LQSEQS_LABLE_RECH);
-                lqseq.retain_sort_seqs(&order_stat, min_c);
-                // lqseq.clean_seqs();
+            }else {
+                let c = lqseq.seqs.iter().filter(|x| x.seq == lqseq.seqs[0].seq).count();
+                if c > 1 {
+                    order_stat.insert(0, min_c);
+                }
             }
-        } else if max1_c >= min_c {
-            // one genotype
-            lqseq.set_lable(LQSEQS_LABLE_SUCC);
-            lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
-            if max2_c >= min_c {
-                lqseq.set_lable(LQSEQS_LABLE_RECH);
-                lqseq.retain_sort_seqs(&order_stat, min_c);
-            } else {
-                lqseq.clean_seqs();
+
+            if max1_p != 0 && max1_c < min_c { // ln case max1_p is the only correct kmer.
+                *order_stat.get_mut(&lqseq.seqs[max1_p].order).unwrap() = min_c;
             }
-        // } else if max1_c > 0 {
-        //     // no dominant genotype
-        //     lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
-        //     lqseq.set_lable(LQSEQS_LABLE_SUCC);
-        //     lqseq.clean_seqs();
-        } else {
-            // no valid kmers or dominant genotype
-            let p = get_most1_frequent_lqseqs(lqseq, 0);
-            lqseq.sudoseed = lqseq.seqs[p].seq.to_owned();
-            lqseq.set_lable(LQSEQS_LABLE_SUCC);
+        };
+
+        lqseq.retain_sort_seqs(&order_stat, min_c);
+        
+        if lqseq.seqs.len() <= 1 {
+            if !lqseq.seqs.is_empty() {//IN case the sudoseed/lqseq is not from ref
+                lqseq.sudoseed.clear();
+                lqseq.sudoseed.push_str(&lqseq.seqs[0].seq);
+            }
+            lqseq.unset_lable(LQSEQS_LABLE_RECH);
             lqseq.clean_seqs();
-        }
+        }  
     }
 }
 
-fn retrieve_seed_at_hete(lqseqs: &mut [LqSeqs]) {
+fn mark_hete_lqseqs(lqseqs: &mut [LqSeqs]) {
     let mut stats = [0; LQSEQ_MAX_CAN_COUNT];
     let mut order_stat = HashMap::default();
 
-    for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_HETE)) {
-        let (_, max1_p, _, _) = fill_order_stat(&lqseq, &mut stats, &mut order_stat);
+    for lqseq in lqseqs.iter_mut() {
+        let (_, max1_p, max2_c, max2_p) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
         let min_c = get_min_count(lqseq.seqs.len());
 
-        lqseq.sudoseed = lqseq.seqs[max1_p].seq.to_owned();
-        lqseq.set_lable(LQSEQS_LABLE_SUCC);
-        lqseq.set_lable(LQSEQS_LABLE_RECH); //this lqseq also need do be re check
-        lqseq.retain_sort_seqs(&order_stat, min_c);
+       if max2_c >= min_c && (lqseq.seqs.len() >= 6 || lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()) 
+            && is_valid_snp(lqseq.seqs[max1_p].seq.as_bytes(), lqseq.seqs[max2_p].seq.as_bytes()) {
+            lqseq.set_lable(LQSEQS_LABLE_HETE);
+            
+            for (p, seq) in lqseq.seqs.iter_mut().enumerate().filter(|(_, v)| v.kscore > 0){
+                if stats[p] < min_c {
+                    seq.kscore = 0;
+                }
+            }
+        }
     }
 }
 
@@ -1057,11 +1008,12 @@ fn reupdate_consensus_with_lqseqs(
     consensus: Vec<ConsensusBase>,
     kmer_info: &KmerInfo,
     min_kmer_count: u16,
+    select_by_count: bool
 ) -> Vec<ConsensusBase> {
     let ksize = kmer_info.ksize as usize;
     let mut kmer_hash: HashMap<u64, u16> = HashMap::default();
     let mut i = 0;
-    let mut lqseqs_i = get_lqseqs_next_idx_by_lable(&lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
+    let mut lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
     while i < consensus.len() {
         if lqseqs_i < lqseqs.len() && consensus[i].pos == lqseqs[lqseqs_i].start {
             let start = if i > ksize { i - ksize + 1 } else { 0 };
@@ -1088,7 +1040,7 @@ fn reupdate_consensus_with_lqseqs(
                 i += 1;
             }
 
-            lqseqs_i = get_lqseqs_next_idx_by_lable(&lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
+            lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
         } else {
             i += 1;
         }
@@ -1097,7 +1049,7 @@ fn reupdate_consensus_with_lqseqs(
     kmer_info.retrieve_kmers_count_from_dump(&mut kmer_hash);
 
     i = 0;
-    lqseqs_i = get_lqseqs_next_idx_by_lable(&lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
+    lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
     while i < consensus.len() {
         if lqseqs_i < lqseqs.len() && consensus[i].pos == lqseqs[lqseqs_i].start {
             let start = if i > ksize { i - ksize + 1 } else { 0 };
@@ -1130,7 +1082,7 @@ fn reupdate_consensus_with_lqseqs(
                 i += 1;
             }
 
-            lqseqs_i = get_lqseqs_next_idx_by_lable(&lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
+            lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
         } else {
             i += 1;
         }
@@ -1139,10 +1091,10 @@ fn reupdate_consensus_with_lqseqs(
     for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_RECH)) {
         let mut c = 0;
         let mut valid_count = 0;
-        for (p, kscore) in lqseq.seqs.iter().map(|x| x.kscore).enumerate() {
+        for (p, seq) in lqseq.seqs.iter().enumerate() {
             // lqseq.seqs has been sorted by count
-            if kscore != 0  {
-                if c == 0 {
+            if seq.kscore != 0  {
+                if c == 0 || seq.order == 0 {//in case ref is prefer
                     c = p + 1;
                 }
 
@@ -1150,7 +1102,7 @@ fn reupdate_consensus_with_lqseqs(
             }
         }
 
-        //two or more valid kmers, need to recheck using longer kmer dump data.
+        //two or more valid kmers, need to recheck using longer kmer databases.
         if valid_count > 1 {
             lqseq.set_lable(LQSEQS_LABLE_TEMP);
         }
@@ -1158,12 +1110,20 @@ fn reupdate_consensus_with_lqseqs(
         if c != 0 {
             lqseq.sudoseed.clear();
             lqseq.sudoseed.push_str(&lqseq.seqs[c - 1].seq);
-        } else {
-            lqseq.unset_lable(LQSEQS_LABLE_RECH);
+        } else if !select_by_count {// keep the reference sequence unchanged if all lqseqs are invalid.
+            lqseq.sudoseed.clear();
+            let mut i = 0;
+            for (p, seq) in lqseq.seqs.iter().enumerate(){
+                if seq.order == 0 {
+                    i = p;
+                    break;
+                }
+            }
+            lqseq.sudoseed.push_str(&lqseq.seqs[i].seq);
         }
     }
     // display_lqseqs_vec(&lqseqs);
-    let consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_RECH);
+    let consensus = update_consensus_with_lqseqs(lqseqs, consensus, LQSEQS_LABLE_RECH);
 
     //clean LQSEQS_LABLE_TEMP flag
     for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_RECH)){
@@ -1280,22 +1240,21 @@ fn generate_lqseqs_from_tags_kmer(
             }
         }
     }
-    // drop(alignseqs);
 
-    retrieve_kmer_count(&mut lqseqs, &kmer_info, opt.min_kmer_count);
+    retrieve_kmer_count(&mut lqseqs, kmer_info, opt.min_kmer_count);
     // display_lqseqs_vec(&lqseqs);
-    mark_lable_lqseqs(&mut lqseqs, consensus.len() < 50_000 && out_cns);
-    // display_lqseqs_vec(&lqseqs);
-    if out_cns {
-        retrieve_seed_at_hete(&mut lqseqs);
+    if out_cns{
+        // display_lqseqs_vec(&lqseqs);
+        fill_seed_lqseqs(&mut lqseqs, opt.select_by_count);
         let mut consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_SUCC);
 
         for kmer_info in &opt.yak{
-            consensus = reupdate_consensus_with_lqseqs(&mut lqseqs, consensus, &kmer_info, opt.min_kmer_count);
+            consensus = reupdate_consensus_with_lqseqs(&mut lqseqs, consensus, kmer_info, opt.min_kmer_count, opt.select_by_count);
         }
 
         Some(consensus)
-    } else {
+    }else {
+        mark_hete_lqseqs(&mut lqseqs);
         let invalid_ids = phase_reads_by_lqseqs(&lqseqs, opt.model == "ref");
         for id in invalid_ids {
             alignseqs[id as usize].align_bases = Vec::new();
