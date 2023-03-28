@@ -291,13 +291,15 @@ pub fn phase_communities(
     data: HashMap<u32, HashMap<u32, f32>>,
     ref_weight: Option<HashMap<u32, f32>>,
 ) -> Vec<u32> {
-    fn stat_ref_weight(ref_weight: &HashMap<u32, f32>, nodes: &HashSet<u32>) -> (u32, NotNan<f32>) {
+    fn stat_ref_weight(ref_weight: &HashMap<u32, f32>, nodes: &HashSet<u32>) -> (i32, NotNan<f32>) {
         let mut count = 0;
         let mut weight = 0.;
         for node in nodes {
             if let Some(v) = ref_weight.get(node) {
                 if *v > 0. {
                     count += 1;
+                }else if *v < 0. {
+                    count -= 1;
                 }
                 weight += v;
             }
@@ -308,7 +310,7 @@ pub fn phase_communities(
     let lv = Louvain::new(data);
     let (data, mut communities) = lv.execute();
 
-    if let Some(ref_weight) = ref_weight {
+    if let Some(ref ref_weight) = ref_weight {
         // sort communities by the count and sum of weights between each community and reference from large to small,
         // this solution may need to be optimized
         communities.sort_by_cached_key(|x| Reverse(stat_ref_weight(&ref_weight, &x.nodes)));
@@ -337,7 +339,8 @@ pub fn phase_communities(
     }
 
     // for c in &communities {
-    //     println!("{} {} {} {} {:?}", c.id, !invalid_ids.contains(&c.id), c.weight, c.nodes.len(), c.nodes);
+    //     println!("{} {} {} {} {:?} {:?}", c.id, !invalid_ids.contains(&c.id), c.weight, c.nodes.len(), 
+    //         stat_ref_weight(&ref_weight.as_ref().unwrap(), &c.nodes), c.nodes);
     // }
     // panic!("");
 
@@ -347,7 +350,7 @@ pub fn phase_communities(
         .into_iter()
         .filter(|x| invalid_ids.contains(&x.id))
     {
-        invalid_nodes.extend(community.nodes.into_iter().collect::<Vec<u32>>());
+        invalid_nodes.extend(community.nodes.into_iter());
     }
     invalid_nodes
 }
