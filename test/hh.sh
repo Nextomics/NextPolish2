@@ -3,10 +3,10 @@
 #> huj
 ../yak/yak count -o k21.yak -k 21 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz)  # 2023-03-01 13:38:22
 #> huj
-../yak/yak count -o k51.yak -k 51 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz)  # 2023-03-01 13:38:31
+../yak/yak count -o k31.yak -k 31 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz)  # 2023-03-01 13:38:31
 #> huj
 minimap2 -ax map-hifi -t 5 asm.fa.gz hifi.fasta.gz|samtools sort -o hifi.map.sort.bam  # 2023-03-01 13:39:32
 #> huj
 samtools index hifi.map.sort.bam  # 2023-03-01 13:39:38
 #> huj
-../target/release/nextPolish2 -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k51.yak > asm.np2.fa  # 2023-03-01 13:40:20
+../target/release/nextPolish2 -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa  # 2023-03-01 13:40:20
