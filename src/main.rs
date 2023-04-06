@@ -1,6 +1,6 @@
 use crossbeam_channel::bounded;
 use crossbeam_utils::thread;
-use fxhash::FxHashMap as HashMap;
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use kseq::parse_path;
 use rust_htslib::bam::{
     ext::BamRecordExtensions, record::Cigar, record::CigarStringView, IndexedReader, Read, Record,
@@ -835,7 +835,7 @@ fn fill_order_stat(lqseq: &LqSeqs, stats: &mut[usize], order_stat: &mut HashMap<
     (max1_c, max1_p, max2_c, max2_p)
 }
 
-fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs], select_by_count: bool) {
+fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
     let mut stats = [0; LQSEQ_MAX_CAN_COUNT];
     let mut order_stat = HashMap::default();
 
@@ -847,25 +847,23 @@ fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs], select_by_count: bool) {
         lqseq.set_lable(LQSEQS_LABLE_RECH); //this lqseq need do be re-check
         let min_c = get_min_count(lqseq.seqs.len());
         
-        if !select_by_count  {
-            assert_eq!(lqseq.seqs[0].order, 0, "the first lqseq is not ref.");
-            
-            // make sure the lqseq from ref will be saved, here *v/c > 1 is to avoid switch err.
-            if let Some(v) = order_stat.get_mut(&0) {
-                if *v > 1 && *v < min_c{
-                    *v = min_c;
-                }
-            }else {
-                let c = lqseq.seqs.iter().filter(|x| x.seq == lqseq.seqs[0].seq).count();
-                if c > 1 {
-                    order_stat.insert(0, min_c);
-                }
+        assert_eq!(lqseq.seqs[0].order, 0, "the first lqseq is not ref.");
+        
+        // make sure the lqseq from ref will be saved, here *v/c > 1 is to avoid switch err.
+        if let Some(v) = order_stat.get_mut(&0) {
+            if *v > 1 && *v < min_c{
+                *v = min_c;
             }
+        }else {
+            let c = lqseq.seqs.iter().filter(|x| x.seq == lqseq.seqs[0].seq).count();
+            if c > 1 {
+                order_stat.insert(0, min_c);
+            }
+        }
 
-            if max1_p != 0 && max1_c < min_c { // ln case max1_p is the only correct kmer.
-                *order_stat.get_mut(&lqseq.seqs[max1_p].order).unwrap() = min_c;
-            }
-        };
+        if max1_p != 0 && max1_c < min_c { // ln case max1_p is the only correct kmer.
+            *order_stat.get_mut(&lqseq.seqs[max1_p].order).unwrap() = min_c;
+        }
 
         lqseq.retain_sort_seqs(&order_stat, min_c);
         
@@ -885,11 +883,12 @@ fn mark_hete_lqseqs(lqseqs: &mut [LqSeqs]) {
     let mut order_stat = HashMap::default();
 
     for lqseq in lqseqs.iter_mut() {
-        let (_, max1_p, max2_c, max2_p) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
+        let (max1_c, max1_p, max2_c, max2_p) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
         let min_c = get_min_count(lqseq.seqs.len());
 
-       if max2_c >= min_c && (lqseq.seqs.len() >= 6 || lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()) 
-            && is_valid_snp(lqseq.seqs[max1_p].seq.as_bytes(), lqseq.seqs[max2_p].seq.as_bytes()) {
+       if max2_c >= min_c && (lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len() ||
+                (lqseq.seqs.len() >= 6 && max2_c >= max1_c/2)) &&
+                is_valid_snp(lqseq.seqs[max1_p].seq.as_bytes(), lqseq.seqs[max2_p].seq.as_bytes()) {
             lqseq.set_lable(LQSEQS_LABLE_HETE);
             
             for (p, seq) in lqseq.seqs.iter_mut().enumerate().filter(|(_, v)| v.kscore > 0){
@@ -901,10 +900,11 @@ fn mark_hete_lqseqs(lqseqs: &mut [LqSeqs]) {
     }
 }
 
-fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool) -> Vec<u32> {
+fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool, use_all_reads: bool) -> Vec<u32> {
     let mut data = new_data();
     let mut dif = new_data();
     let mut ref_data = new_data();
+    let mut invalid_ids = HashSet::default();
     for lqseq in lqseqs.iter().filter(|x| x.has_lable(LQSEQS_LABLE_HETE)) {
         for i in 0..lqseq.seqs.len() {
             let seq1 = &lqseq.seqs[i];
@@ -927,6 +927,9 @@ fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool) -> Vec<u32> {
                 if seq1.order == 0 {
                     if asref {
                         insert_data(&mut ref_data, seq1.order, seq2.order, w);
+                    }
+                    if w < 0. && !use_all_reads {
+                        invalid_ids.insert(seq2.order);
                     }
                     continue;
                 }
@@ -953,8 +956,17 @@ fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool) -> Vec<u32> {
         }
     }
 
-    //some valid ids are not in valid_ids, so here we should to return invalid_ids
-    phase_communities(data, ref_data.into_values().next())
+    if !use_all_reads {
+        //In case that the kscore of ref lqseq (heter. lqseqs) is zero
+        data.retain(|k, _| !invalid_ids.contains(k));
+        for (_, n1_v) in data.iter_mut() {
+            n1_v.retain(|k, _| !invalid_ids.contains(k));
+        }
+    }
+
+    let mut new_invalid_ids = phase_communities(data, ref_data.into_values().next());    
+    new_invalid_ids.extend(invalid_ids.into_iter());
+    new_invalid_ids
 }
 
 fn get_lqseqs_next_idx_by_lable(lqseqs: &[LqSeqs], mut lqseqs_i: usize, lable: u8) -> usize {
@@ -1005,7 +1017,7 @@ fn reupdate_consensus_with_lqseqs(
     consensus: Vec<ConsensusBase>,
     kmer_info: &KmerInfo,
     min_kmer_count: u16,
-    select_by_count: bool
+    iter_count: usize,
 ) -> Vec<ConsensusBase> {
     let ksize = kmer_info.ksize as usize;
     let mut kmer_hash: HashMap<u64, u16> = HashMap::default();
@@ -1107,7 +1119,7 @@ fn reupdate_consensus_with_lqseqs(
         if c != 0 {
             lqseq.sudoseed.clear();
             lqseq.sudoseed.push_str(&lqseq.seqs[c - 1].seq);
-        } else if !select_by_count {// keep the reference sequence unchanged if all lqseqs are invalid.
+        } else if iter_count == 1 {// keep the reference sequence unchanged if all lqseqs are invalid.
             lqseq.sudoseed.clear();
             let mut i = 0;
             for (p, seq) in lqseq.seqs.iter().enumerate(){
@@ -1241,17 +1253,17 @@ fn generate_lqseqs_from_tags_kmer(
     // display_lqseqs_vec(&lqseqs);
     if out_cns{
         // display_lqseqs_vec(&lqseqs);
-        fill_seed_lqseqs(&mut lqseqs, opt.select_by_count);
+        fill_seed_lqseqs(&mut lqseqs);
         let mut consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_SUCC);
 
-        for kmer_info in &opt.yak{
-            consensus = reupdate_consensus_with_lqseqs(&mut lqseqs, consensus, kmer_info, opt.min_kmer_count, opt.select_by_count);
+        for (p, kmer_info) in opt.yak.iter().enumerate(){
+            consensus = reupdate_consensus_with_lqseqs(&mut lqseqs, consensus, kmer_info, opt.min_kmer_count, p + 1);
         }
 
         Some(consensus)
     }else {
         mark_hete_lqseqs(&mut lqseqs);
-        let invalid_ids = phase_reads_by_lqseqs(&lqseqs, opt.model == "ref");
+        let invalid_ids = phase_reads_by_lqseqs(&lqseqs, opt.model == "ref", opt.use_all_reads);
         for id in invalid_ids {
             alignseqs[id as usize].align_bases = Vec::new();
         }
