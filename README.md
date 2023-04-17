@@ -38,31 +38,38 @@ cd test && bash hh.sh
 
 ### <a name="usage"></a>General usage
 
-NextPolish2 takes a genome assembly file, a HiFi mapping file and one or more k-mer database files as input and generates the polished genome.
+NextPolish2 takes a genome assembly file, a HiFi mapping file and one or more k-mer dataset files as input and generates the polished genome.
 
-1. Prepare HiFi mapping file
+1. Prepare HiFi mapping file ([winnowmap](https://github.com/marbl/Winnowmap) or [minimap2](https://github.com/lh3/minimap2/)).
 
 ```sh
-# mapping
-minimap2 -ax map-hifi -t 5 asm.fa.gz hifi.fasta.gz|samtools sort -o hifi.map.sort.bam
+meryl count k=15 output merylDB asm.fa.gz
+meryl print greater-than distinct=0.9998 merylDB > repetitive_k15.txt
+winnowmap -t 5 -W repetitive_k15.txt -ax map-pb asm.fa.gz hifi.fasta.gz|samtools sort -o hifi.map.sort.bam -
+
+# or mapping using minimap2
+# minimap2 -ax map-hifi -t 5 asm.fa.gz hifi.fasta.gz|samtools sort -o hifi.map.sort.bam -
+
 # indexing
 samtools index hifi.map.sort.bam
 ```
 
-2. Prepare k-mer database files. Here we only produce 21-mer and 31-mer databases, you can produce more k-mer databases with different k-mer size
+2. Prepare k-mer dataset files ([yak](https://github.com/lh3/yak)). Here we only produce 21-mer and 31-mer datasets, you can produce more k-mer datasets with different k-mer size.
 
 ```sh
-# produce a 21-mer database, remove -b 37 if you want to count singletons
+# produce a 21-mer dataset, remove -b 37 if you want to count singletons
 ./yak/yak count -o k21.yak -k 21 -b 37 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz)
-# produce a 31-mer database, remove -b 37 if you want to count singletons
+
+# produce a 31-mer dataset, remove -b 37 if you want to count singletons
 ./yak/yak count -o k31.yak -k 31 -b 37 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz) 
 ```
 
-3. Run NextPolish2
+3. Run NextPolish2.
 
 ```sh
 ./target/release/nextPolish2 -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa
-# or try with -r, it usually produces a better result for highly heterozygous or homozygous genome.
+
+# or try with -r, it usually produces better results for highly heterozygous or homozygous genomes.
 # ./target/release/nextPolish2 -r -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa
 ```
 
@@ -97,8 +104,9 @@ NextPolish2 is only freely available for academic use and other non-commercial u
 
 ### <a name="limit"></a>Limitations
 
-1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), NextPolish2 will output original bases, in this case, the results can be optimized by adjusting the mapping parameters.
-2. NextPolish2 can only fix some structural misassemblies.
+1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), users can try to adjust mapping parameters.
+2. The performance of NextPolish2 relies heavily on the quality of short reads.
+3. NextPolish2 can only fix some structural misassemblies.
 
 ### <a name="benchmark"></a>Benchmarking
 
