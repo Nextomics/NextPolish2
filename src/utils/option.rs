@@ -64,7 +64,7 @@ impl Option {
                     .value_parser(to_abspath_string)
                     .required(true)
                     .action(ArgAction::Append)
-                    .help("one or more k-mer databases in yak format."),
+                    .help("one or more k-mer dataset in yak format."),
             )
             .arg(
                 Arg::new("out")
@@ -102,7 +102,7 @@ impl Option {
                     .value_name("INT")
                     .default_value(opt.min_kmer_count.to_string())
                     .value_parser(value_parser!(u16))
-                    .help("filter kmers in k-mer databases with count <= INT."),
+                    .help("filter kmers in k-mer dataset with count <= INT."),
             )
             .arg(
                 Arg::new("thread")
