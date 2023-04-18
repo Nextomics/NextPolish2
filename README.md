@@ -73,7 +73,7 @@ samtools index hifi.map.sort.bam
 # ./target/release/nextPolish2 -r -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa
 ```
 
-***Note:*** If your genome is assembled via trio binning. You can discard reads that have different haplotype with the reference during the mapping procedure, which usually produces a better result.
+***Note:*** If your genome is assembled via **trio binning**. You can discard reads that have different haplotype with the reference before the mapping procedure, which usually produces a better result, see [here](./doc/benchmark3.md) for an example.
 
 #### More options
 
@@ -104,13 +104,24 @@ NextPolish2 is only freely available for academic use and other non-commercial u
 
 ### <a name="limit"></a>Limitations
 
-1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), users can try to adjust mapping parameters.
+1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), you can try to adjust mapping parameters.
 2. The performance of NextPolish2 relies heavily on the quality of short reads.
 3. NextPolish2 can only fix some structural misassemblies.
 
 ### <a name="benchmark"></a>Benchmarking
 
-Coming soon...
+| Source                                           | Software           | QV      | Switch error rate (‱) |
+| :----------------------------------------------: | ------------------ | :-----: | :---------------------: |
+| [*A. thaliana*](./doc/benchmark1.md)             | Hifiasm  (primary) | 47.67   | 1.99                    |
+|^(simulated data, primary contigs)^               | NextPolish2        |**65.34**| **0.35**                |
+| [*A. thaliana*](./doc/benchmark2.md)             | Hifiasm  (primary) | 58.03   |                         |
+| ^(Col-XJTU, primary contigs)^                    | NextPolish2        |**64.34**|                         |
+| [*H. sapiens*](./doc/benchmark3.md)              | Hifiasm  (primary) | 60.25   | 0.15                    |
+| ^(HG002, primary contigs)^                       | NextPolish2        |**62.85**| **0.14**                |
+| [*H. sapiens*](./doc/benchmark3.md)              | Hifiasm  (trio)    | 59.77   | 0.21                    |
+|^(HG002, paternal contigs)^                       | NextPolish2        |**63.42**| **0.20**                |
+| [*H. sapiens*](./doc/benchmark3.md)              | Hifiasm  (trio)    | 59.78   | 0.33                    |
+|^(HG002, maternal contigs)^                       | NextPolish2        |**63.25**| **0.30**                |
 
 ### Star
 You can track updates by tab the **Star** button on the upper-right corner at the [github page](https://github.com/Nextomics/NextPolish2).
