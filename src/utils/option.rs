@@ -42,7 +42,7 @@ impl Option {
         let opt = Option::default();
         let args = Command::new("nextPolish2")
             .version(VERSION)
-            .about("repeat-aware polishing genome assemblies using HiFi and short reads")
+            .about("Repeat-aware polishing genomes assembled using HiFi long reads")
             .arg_required_else_help(true)
             .arg(
                 Arg::new("bam")
