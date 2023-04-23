@@ -1,6 +1,7 @@
 use crossbeam_channel::bounded;
 use crossbeam_utils::thread;
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use itertools::Itertools;
 use kseq::parse_path;
 use rust_htslib::bam::{
     ext::BamRecordExtensions, record::Cigar, record::CigarStringView, IndexedReader, Read, Record,
@@ -638,7 +639,7 @@ fn display_consensusbase_vec(
 struct LqSeq {
     order: u32,
     kscore: u16,
-    kmer: u64,   // 0 means not a valid kmer
+    kmer: u64, // 0 means not a valid kmer
     seq: String,
 }
 
@@ -790,8 +791,7 @@ fn is_valid_snp(seq1: &[u8], seq2: &[u8]) -> bool {
     false
 }
 
-fn get_min_count(c: usize)-> usize{
-
+fn get_min_count(c: usize) -> usize {
     if c >= 9 {
         3
     } else if c >= 6 {
@@ -801,7 +801,11 @@ fn get_min_count(c: usize)-> usize{
     }
 }
 
-fn fill_order_stat(lqseq: &LqSeqs, stats: &mut[usize], order_stat: &mut HashMap<u32, usize>) -> (usize, usize, usize, usize){
+fn fill_order_stat(
+    lqseq: &LqSeqs,
+    stats: &mut [usize],
+    order_stat: &mut HashMap<u32, usize>,
+) -> (usize, usize, usize, usize) {
     let (mut max1_c, mut max1_p, mut max2_c, mut max2_p) = (0, 0, 0, 0);
     stats.fill(0);
     order_stat.clear();
@@ -846,35 +850,41 @@ fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
 
         lqseq.set_lable(LQSEQS_LABLE_RECH); //this lqseq need do be re-check
         let min_c = get_min_count(lqseq.seqs.len());
-        
+
         assert_eq!(lqseq.seqs[0].order, 0, "the first lqseq is not ref.");
-        
+
         // make sure the lqseq from ref will be saved, here *v/c > 1 is to avoid switch err.
         if let Some(v) = order_stat.get_mut(&0) {
-            if *v > 1 && *v < min_c{
+            if *v > 1 && *v < min_c {
                 *v = min_c;
             }
-        }else {
-            let c = lqseq.seqs.iter().filter(|x| x.seq == lqseq.seqs[0].seq).count();
+        } else {
+            let c = lqseq
+                .seqs
+                .iter()
+                .filter(|x| x.seq == lqseq.seqs[0].seq)
+                .count();
             if c > 1 {
                 order_stat.insert(0, min_c);
             }
         }
 
-        if max1_p != 0 && max1_c < min_c { // ln case max1_p is the only correct kmer.
+        if max1_p != 0 && max1_c < min_c && max1_c > 1 {
+            // ln case max1_p is the only correct kmer.
             *order_stat.get_mut(&lqseq.seqs[max1_p].order).unwrap() = min_c;
         }
 
         lqseq.retain_sort_seqs(&order_stat, min_c);
-        
+
         if lqseq.seqs.len() <= 1 {
-            if !lqseq.seqs.is_empty() {//IN case the sudoseed/lqseq is not from ref
+            if !lqseq.seqs.is_empty() {
+                //IN case the sudoseed/lqseq is not from ref
                 lqseq.sudoseed.clear();
                 lqseq.sudoseed.push_str(&lqseq.seqs[0].seq);
             }
             lqseq.unset_lable(LQSEQS_LABLE_RECH);
             lqseq.clean_seqs();
-        }  
+        }
     }
 }
 
@@ -886,12 +896,22 @@ fn mark_hete_lqseqs(lqseqs: &mut [LqSeqs]) {
         let (max1_c, max1_p, max2_c, max2_p) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
         let min_c = get_min_count(lqseq.seqs.len());
 
-       if max2_c >= min_c && (lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len() ||
-                (lqseq.seqs.len() >= 6 && max2_c >= max1_c/2)) &&
-                is_valid_snp(lqseq.seqs[max1_p].seq.as_bytes(), lqseq.seqs[max2_p].seq.as_bytes()) {
+        if max2_c >= min_c
+            && (lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()
+                || (lqseq.seqs.len() >= 6 && max2_c >= max1_c / 2))
+            && is_valid_snp(
+                lqseq.seqs[max1_p].seq.as_bytes(),
+                lqseq.seqs[max2_p].seq.as_bytes(),
+            )
+        {
             lqseq.set_lable(LQSEQS_LABLE_HETE);
-            
-            for (p, seq) in lqseq.seqs.iter_mut().enumerate().filter(|(_, v)| v.kscore > 0){
+
+            for (p, seq) in lqseq
+                .seqs
+                .iter_mut()
+                .enumerate()
+                .filter(|(_, v)| v.kscore > 0)
+            {
                 if stats[p] < min_c {
                     seq.kscore = 0;
                 }
@@ -945,7 +965,7 @@ fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool, use_all_reads: bool) ->
             }
         }
     }
-    
+
     // Here we may need to re-consider?
     // If A and B contain >= 3 different SNPs, then A and B are from different phases.
     for (n1, n1_v) in dif.into_iter() {
@@ -964,7 +984,7 @@ fn phase_reads_by_lqseqs(lqseqs: &[LqSeqs], asref: bool, use_all_reads: bool) ->
         }
     }
 
-    let mut new_invalid_ids = phase_communities(data, ref_data.into_values().next());    
+    let mut new_invalid_ids = phase_communities(data, ref_data.into_values().next());
     new_invalid_ids.extend(invalid_ids.into_iter());
     new_invalid_ids
 }
@@ -1019,65 +1039,282 @@ fn reupdate_consensus_with_lqseqs(
     min_kmer_count: u16,
     iter_count: usize,
 ) -> Vec<ConsensusBase> {
+    //not include s & e
+    fn iter_consensus_region(
+        consensus: &[ConsensusBase],
+        idx: &mut usize,
+        s: u32,
+        e: u32,
+    ) -> (usize, usize) {
+        let mut i = *idx;
+
+        while consensus[i].pos <= s {
+            // more than one ConsensusBase has pos == s
+            i += 1;
+        }
+        while consensus[i].pos > s {
+            i -= 1;
+        }
+        i += 1;
+        assert!(consensus[i].pos > s && consensus[i - 1].pos <= s); //TODO only for debug
+        let si = i;
+
+        while consensus[i].pos >= e {
+            i -= 1;
+        }
+        while consensus[i].pos < e {
+            i += 1;
+        }
+        i -= 1;
+        assert!(consensus[i].pos < e && consensus[i + 1].pos >= e); //TODO only for debug
+        *idx = i;
+        (si, i + 1)
+    }
+
+    //not include p
+    fn iter_consensus_extend(
+        consensus: &[ConsensusBase],
+        idx: &mut usize,
+        p: u32,
+        l: usize,
+        toleft: bool,
+    ) -> (usize, usize) {
+        let si;
+        let ei;
+        let mut i = *idx;
+        if toleft {
+            while consensus[i].pos >= p {
+                i -= 1;
+            }
+            while consensus[i].pos < p {
+                // more than one ConsensusBase has pos == s
+                i += 1;
+            }
+            assert!(consensus[i].pos >= p && consensus[i - 1].pos < p); //TODO only for debug
+            *idx = i;
+            ei = i;
+            si = if i > l { i - l } else { 0 };
+        } else {
+            while consensus[i].pos <= p {
+                i += 1;
+            }
+            while consensus[i].pos > p {
+                i -= 1;
+            }
+            assert!(consensus[i].pos <= p && consensus[i + 1].pos > p); //TODO only for debug
+            *idx = i;
+            si = i + 1;
+            ei = if i + l < consensus.len() {
+                i + l + 1
+            } else {
+                consensus.len()
+            };
+        }
+        (si, ei)
+    }
+
+    fn iter_chain_lqseqs<'a>(
+        ovl_lqseqs: &'a [(usize, &String)],
+        rech_idxs: &[usize],
+        lqseqs: &'a [LqSeqs],
+        consensus: &'a [ConsensusBase],
+        idx: &mut usize,
+        sj: usize,
+        si_l: usize,
+        ei_l: usize,
+        si_r: usize,
+        ei_r: usize,
+    ) -> Box<dyn Iterator<Item = u8> + 'a> {
+        let mut iter: Box<dyn Iterator<Item = u8>> =
+            Box::new(consensus[si_l..ei_l].iter().map(|x| x.base as u8));
+        for (i, (_, seq)) in ovl_lqseqs.iter().enumerate() {
+            if i < ovl_lqseqs.len() - 1 {
+                let s = lqseqs[rech_idxs[sj + i]].end;
+                let e = lqseqs[rech_idxs[sj + i + 1]].start;
+                iter = if s + 1 == e {
+                    Box::new(iter.chain(seq.as_bytes().iter().copied()))
+                } else {
+                    let (si, ei) = iter_consensus_region(consensus, idx, s, e);
+                    Box::new(
+                        iter.chain(seq.as_bytes().iter().copied())
+                            .chain(consensus[si..ei].iter().map(|x| x.base as u8)),
+                    )
+                }
+            } else {
+                iter = Box::new(
+                    iter.chain(seq.as_bytes().iter().copied())
+                        .chain(consensus[si_r..ei_r].iter().map(|x| x.base as u8)),
+                );
+            }
+        }
+        iter
+    }
+
     let ksize = kmer_info.ksize as usize;
     let mut kmer_hash: HashMap<u64, u16> = HashMap::default();
-    let mut i = 0;
-    let mut lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
-    while i < consensus.len() {
-        if lqseqs_i < lqseqs.len() && consensus[i].pos == lqseqs[lqseqs_i].start {
-            let start = if i > ksize { i - ksize + 1 } else { 0 };
-            for seq in lqseqs[lqseqs_i].seqs.iter().map(|x| &x.seq) {
-                let mut p = i;
-                let iter = consensus[start..p]
-                    .iter()
-                    .map(|x| x.base)
-                    .chain(seq.chars());
-                while consensus[p].pos <= lqseqs[lqseqs_i].end {
-                    p += 1;
-                }
-                let mut end = p + ksize - 1;
-                if end > consensus.len(){
-                    end = consensus.len();
-                }
-                let iter = iter.chain(consensus[p..end].iter().map(|x| x.base));
-                for kmer in iter2kmer(iter.map(|x| x as u8), ksize) {
+    let rech_idxs = lqseqs
+        .iter()
+        .enumerate()
+        .rev()
+        .filter_map(|(i, x)| {
+            if x.has_lable(LQSEQS_LABLE_RECH) {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<usize>>();
+
+    let mut idx = 0;
+    let mut sj = 0;
+    let mut ej;
+    while sj < rech_idxs.len() {
+        ej = sj + 1;
+        while ej < rech_idxs.len()
+            && lqseqs[rech_idxs[ej]].start < lqseqs[rech_idxs[ej - 1]].end + kmer_info.ksize
+        {
+            ej += 1;
+            if ej > sj + 5 {
+                //to avoid too many lqseqs need to do cartesian product.
+                break;
+            }
+        }
+
+        let (si_l, ei_l) = iter_consensus_extend(
+            &consensus,
+            &mut idx,
+            lqseqs[rech_idxs[sj]].start,
+            ksize - 1,
+            true,
+        );
+        let (si_r, ei_r) = iter_consensus_extend(
+            &consensus,
+            &mut idx,
+            lqseqs[rech_idxs[ej - 1]].end,
+            ksize - 1,
+            false,
+        );
+        if ej == sj + 1 {
+            for seq in lqseqs[rech_idxs[sj]].seqs.iter().map(|x| &x.seq) {
+                for kmer in iter2kmer(
+                    consensus[si_l..ei_l]
+                        .iter()
+                        .map(|x| x.base as u8)
+                        .chain(seq.as_bytes().iter().copied())
+                        .chain(consensus[si_r..ei_r].iter().map(|x| x.base as u8)),
+                    ksize,
+                ) {
                     kmer_hash.insert(kmer_info.to_dump_key(kmer), 0);
                 }
             }
-
-            while i < consensus.len() && consensus[i].pos <= lqseqs[lqseqs_i].end {
-                i += 1;
-            }
-
-            lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
         } else {
-            i += 1;
+            for ovl_lqseqs in (sj..ej)
+                .map(|x| {
+                    lqseqs[rech_idxs[x]]
+                        .seqs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| (i, &x.seq))
+                })
+                .multi_cartesian_product()
+            {
+                // println!("{} {} {:?}",rech_idxs[sj], rech_idxs[ej], ovl_lqseqs);
+                let iter = iter_chain_lqseqs(
+                    &ovl_lqseqs,
+                    &rech_idxs,
+                    lqseqs,
+                    &consensus,
+                    &mut idx,
+                    sj,
+                    si_l,
+                    ei_l,
+                    si_r,
+                    ei_r,
+                );
+                for kmer in iter2kmer(iter, ksize) {
+                    kmer_hash.insert(kmer_info.to_dump_key(kmer), 0);
+                }
+            }
         }
+        sj = ej;
     }
 
     kmer_info.retrieve_kmers_count_from_dump(&mut kmer_hash);
 
-    i = 0;
-    lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs.len(), LQSEQS_LABLE_RECH);
-    while i < consensus.len() {
-        if lqseqs_i < lqseqs.len() && consensus[i].pos == lqseqs[lqseqs_i].start {
-            let start = if i > ksize { i - ksize + 1 } else { 0 };
-            let lqseq_end = lqseqs[lqseqs_i].end;
-            for seq in lqseqs[lqseqs_i].seqs.iter_mut() {
-                let mut p = i;
-                let iter = consensus[start..p]
-                    .iter()
-                    .map(|x| x.base)
-                    .chain(seq.seq.chars());
-                while consensus[p].pos <= lqseq_end {
-                    p += 1;
-                }
-                let mut end = p + ksize - 1;
-                if end > consensus.len(){
-                    end = consensus.len();
-                }
-                let iter = iter.chain(consensus[p..end].iter().map(|x| x.base));
-                seq.kscore = iter2kmer(iter.map(|x| x as u8), ksize)
+    idx = 0;
+    sj = 0;
+    let mut kscore_buf = Vec::with_capacity(LQSEQ_MAX_CAN_COUNT);
+    while sj < rech_idxs.len() {
+        ej = sj + 1;
+        while ej < rech_idxs.len()
+            && lqseqs[rech_idxs[ej]].start < lqseqs[rech_idxs[ej - 1]].end + kmer_info.ksize
+        {
+            ej += 1;
+            if ej > sj + 5 {
+                //to avoid too many lqseqs need to do cartesian product.
+                break;
+            }
+        }
+
+        let (si_l, ei_l) = iter_consensus_extend(
+            &consensus,
+            &mut idx,
+            lqseqs[rech_idxs[sj]].start,
+            ksize - 1,
+            true,
+        );
+        let (si_r, ei_r) = iter_consensus_extend(
+            &consensus,
+            &mut idx,
+            lqseqs[rech_idxs[ej - 1]].end,
+            ksize - 1,
+            false,
+        );
+        if ej == sj + 1 {
+            for seq in lqseqs[rech_idxs[sj]].seqs.iter_mut() {
+                seq.kscore = iter2kmer(
+                    consensus[si_l..ei_l]
+                        .iter()
+                        .map(|x| x.base as u8)
+                        .chain(seq.seq.as_bytes().iter().copied())
+                        .chain(consensus[si_r..ei_r].iter().map(|x| x.base as u8)),
+                    ksize,
+                )
+                .map(|x| {
+                    let kmer = kmer_info.to_dump_key(x);
+                    kmer_hash
+                        .get(&kmer)
+                        .map_or(0, |&v| if v <= min_kmer_count { 0 } else { v })
+                })
+                .min()
+                .unwrap_or(0);
+            }
+        } else {
+            kscore_buf.clear();
+            for ovl_lqseqs in (sj..ej)
+                .map(|x| {
+                    lqseqs[rech_idxs[x]]
+                        .seqs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| (i, &x.seq))
+                })
+                .multi_cartesian_product()
+            {
+                // print!("{} {} {:?} ",rech_idxs[sj], rech_idxs[ej - 1], ovl_lqseqs);
+                let iter = iter_chain_lqseqs(
+                    &ovl_lqseqs,
+                    &rech_idxs,
+                    lqseqs,
+                    &consensus,
+                    &mut idx,
+                    sj,
+                    si_l,
+                    ei_l,
+                    si_r,
+                    ei_r,
+                );
+                let kscore = iter2kmer(iter, ksize)
                     .map(|x| {
                         let kmer = kmer_info.to_dump_key(x);
                         kmer_hash
@@ -1086,15 +1323,24 @@ fn reupdate_consensus_with_lqseqs(
                     })
                     .min()
                     .unwrap_or(0);
-            }
-            while i < consensus.len() && consensus[i].pos <= lqseqs[lqseqs_i].end {
-                i += 1;
+                if kscore > 0 {
+                    for (i, (p, _)) in ovl_lqseqs.iter().enumerate() {
+                        kscore_buf.push((rech_idxs[sj + i], *p, kscore));
+                    }
+                }
             }
 
-            lqseqs_i = get_lqseqs_next_idx_by_lable(lqseqs, lqseqs_i, LQSEQS_LABLE_RECH);
-        } else {
-            i += 1;
+            for i in (sj..ej).map(|x| rech_idxs[x]) {
+                // init all kscore to 0
+                for seq in lqseqs[i].seqs.iter_mut() {
+                    seq.kscore = 0;
+                }
+            }
+            for (i, p, kscore) in &kscore_buf {
+                lqseqs[*i].seqs[*p].kscore = *kscore;
+            }
         }
+        sj = ej;
     }
 
     for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_RECH)) {
@@ -1102,8 +1348,9 @@ fn reupdate_consensus_with_lqseqs(
         let mut valid_count = 0;
         for (p, seq) in lqseq.seqs.iter().enumerate() {
             // lqseq.seqs has been sorted by count
-            if seq.kscore != 0  {
-                if c == 0 || seq.order == 0 {//in case ref is prefer
+            if seq.kscore != 0 {
+                if c == 0 || seq.order == 0 {
+                    //in case ref is prefer
                     c = p + 1;
                 }
 
@@ -1119,10 +1366,11 @@ fn reupdate_consensus_with_lqseqs(
         if c != 0 {
             lqseq.sudoseed.clear();
             lqseq.sudoseed.push_str(&lqseq.seqs[c - 1].seq);
-        } else if iter_count == 1 {// keep the reference sequence unchanged if all lqseqs are invalid.
+        } else if iter_count == 1 {
+            // keep the reference sequence unchanged if all lqseqs are invalid.
             lqseq.sudoseed.clear();
             let mut i = 0;
-            for (p, seq) in lqseq.seqs.iter().enumerate(){
+            for (p, seq) in lqseq.seqs.iter().enumerate() {
                 if seq.order == 0 {
                     i = p;
                     break;
@@ -1135,10 +1383,10 @@ fn reupdate_consensus_with_lqseqs(
     let consensus = update_consensus_with_lqseqs(lqseqs, consensus, LQSEQS_LABLE_RECH);
 
     //clean LQSEQS_LABLE_TEMP flag
-    for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_RECH)){
-        if lqseq.has_lable(LQSEQS_LABLE_TEMP){
+    for lqseq in lqseqs.iter_mut().filter(|x| x.has_lable(LQSEQS_LABLE_RECH)) {
+        if lqseq.has_lable(LQSEQS_LABLE_TEMP) {
             lqseq.unset_lable(LQSEQS_LABLE_TEMP);
-        }else {
+        } else {
             lqseq.unset_lable(LQSEQS_LABLE_RECH);
         }
     }
@@ -1248,21 +1496,29 @@ fn generate_lqseqs_from_tags_kmer(
             }
         }
     }
-    
+
     retrieve_kmer_count(&mut lqseqs, kmer_info, opt.min_kmer_count);
     // display_lqseqs_vec(&lqseqs);
-    if out_cns{
+    if out_cns {
         // display_lqseqs_vec(&lqseqs);
         fill_seed_lqseqs(&mut lqseqs);
         let mut consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_SUCC);
 
-        for (p, kmer_info) in opt.yak.iter().enumerate(){
-            consensus = reupdate_consensus_with_lqseqs(&mut lqseqs, consensus, kmer_info, opt.min_kmer_count, p + 1);
+        // display_lqseqs_vec(&lqseqs);
+        for (p, kmer_info) in opt.yak.iter().enumerate() {
+            consensus = reupdate_consensus_with_lqseqs(
+                &mut lqseqs,
+                consensus,
+                kmer_info,
+                opt.min_kmer_count,
+                p + 1,
+            );
         }
 
         Some(consensus)
-    }else {
+    } else {
         mark_hete_lqseqs(&mut lqseqs);
+        // display_lqseqs_vec(&lqseqs);
         let invalid_ids = phase_reads_by_lqseqs(&lqseqs, opt.model == "ref", opt.use_all_reads);
         for id in invalid_ids {
             alignseqs[id as usize].align_bases = Vec::new();
@@ -1316,7 +1572,7 @@ fn generate_cns_from_best_score_lq<'a>(
                 && consensusbases[p - 1].pos != consensusbases[p - 2].pos
                 && consensusbases[p - 1].base != consensusbases[p - 2].base
             {
-                lq_e = p - 2;
+                lq_e = p - 2; //should be 2
                 lq_s = if lq_s > lq_min_length {
                     lq_s - lq_min_length
                 } else {
@@ -1517,7 +1773,8 @@ fn main() {
 
                                 let mut alignseq = AlignSeq::new(&aln);
                                 if is_clip {
-                                    if tseq.len() < 500_000{// short references usually contain lots of incorrectly alignments with clipping
+                                    if tseq.len() < 500_000 {
+                                        // short references usually contain lots of incorrectly alignments with clipping
                                         continue;
                                     }
                                     alignseq.set_lable(); //should call unset_lable before use the aln_t_s field
