@@ -58,7 +58,8 @@ impl KmerInfo {
         if self.ksize < 32 {
             let mask: u64 = (1 << (2 * self.ksize as u64)) - 1;
             yak_hash64(kmer, mask) >> self.counter_bits
-        }else { //for ksize >= 32, kmer has been hashed
+        } else {
+            //for ksize >= 32, kmer has been hashed
             kmer >> self.counter_bits
         }
     }
@@ -117,28 +118,30 @@ fn yak_hash64(key: u64, mask: u64) -> u64 // invertible integer hash function
     key
 }
 
-
 fn yak_hash64_64(key: u64) -> u64 {
     let mut key = !key + (key << 21);
-    key = key ^ key >> 24; 
-    key = (key + (key << 3)) + (key << 8); 
-    key = key ^ key >> 14; 
-    key = (key + (key << 2)) + (key << 4); 
-    key = key ^ key >> 28; 
+    key = key ^ key >> 24;
+    key = (key + (key << 3)) + (key << 8);
+    key = key ^ key >> 14;
+    key = (key + (key << 2)) + (key << 4);
+    key = key ^ key >> 28;
     key = key + (key << 31);
     key
 }
 
 fn yak_hash_long(x: [u64; 4]) -> u64 {
-    let j = if x[1] < x[3] {0} else {1};
-    yak_hash64_64(x[j << 1]) + yak_hash64_64(x[ j << 1 | 1])
+    let j = if x[1] < x[3] { 0 } else { 1 };
+    yak_hash64_64(x[j << 1]) + yak_hash64_64(x[j << 1 | 1])
 }
 
 pub fn seq2kmer(seq: &str, ksize: usize) -> impl Iterator<Item = u64> + '_ {
     iter2kmer(seq.chars().map(|x| x as u8), ksize)
 }
 
-pub fn iter2kmer<'a>(mut iter: impl Iterator<Item = u8> + 'a, ksize: usize) -> Box<dyn Iterator<Item = u64> + 'a> {
+pub fn iter2kmer<'a>(
+    mut iter: impl Iterator<Item = u8> + 'a,
+    ksize: usize,
+) -> Box<dyn Iterator<Item = u64> + 'a> {
     let mut l = 0;
     if ksize < 32 {
         let shift: u64 = 2 * (ksize as u64 - 1);
@@ -168,31 +171,29 @@ pub fn iter2kmer<'a>(mut iter: impl Iterator<Item = u8> + 'a, ksize: usize) -> B
                 }
             }
         }))
-    }else {
+    } else {
         let shift: u64 = ksize as u64 - 1;
         let mask: u64 = (1 << (ksize as u64)) - 1;
         let mut kmer: [u64; 4] = [0, 0, 0, 0];
-        Box::new(std::iter::from_fn(move || {
-            loop {
-                if let Some(c) = iter.next() {
-                    let c = SEQ_NUM[c as usize] as u64;
-                    if c < 4 {
-                        kmer[0] = (kmer[0] << 1 | (c&1))  & mask;
-                        kmer[1] = (kmer[1] << 1 | (c>>1)) & mask;
-                        kmer[2] = kmer[2] >> 1 | (1 - (c&1))  << shift;
-                        kmer[3] = kmer[3] >> 1 | (1 - (c>>1)) << shift;
-                        l += 1;
-                    } else {
-                        l = 0;
-                        kmer.fill(0);
-                    }
-
-                    if l >= ksize {
-                        return Some(yak_hash_long(kmer));
-                    }
+        Box::new(std::iter::from_fn(move || loop {
+            if let Some(c) = iter.next() {
+                let c = SEQ_NUM[c as usize] as u64;
+                if c < 4 {
+                    kmer[0] = (kmer[0] << 1 | (c & 1)) & mask;
+                    kmer[1] = (kmer[1] << 1 | (c >> 1)) & mask;
+                    kmer[2] = kmer[2] >> 1 | (1 - (c & 1)) << shift;
+                    kmer[3] = kmer[3] >> 1 | (1 - (c >> 1)) << shift;
+                    l += 1;
                 } else {
-                    return None;
+                    l = 0;
+                    kmer.fill(0);
                 }
+
+                if l >= ksize {
+                    return Some(yak_hash_long(kmer));
+                }
+            } else {
+                return None;
             }
         }))
     }

@@ -147,7 +147,7 @@ impl Louvain {
             for nid in nodes {
                 // if communities or node already contain nid
                 let mut new_nid = nid;
-                while communities.contains_key(&new_nid) || node.contains_key(&new_nid){
+                while communities.contains_key(&new_nid) || node.contains_key(&new_nid) {
                     new_nid += 1;
                 }
 
@@ -298,7 +298,7 @@ pub fn phase_communities(
             if let Some(v) = ref_weight.get(node) {
                 if *v > 0. {
                     count += 1;
-                }else if *v < 0. {
+                } else if *v < 0. {
                     count -= 1;
                 }
                 weight += v;
@@ -313,7 +313,7 @@ pub fn phase_communities(
     if let Some(ref ref_weight) = ref_weight {
         // sort communities by the count and sum of weights between each community and reference from large to small,
         // this solution may need to be optimized
-        communities.sort_by_cached_key(|x| Reverse(stat_ref_weight(&ref_weight, &x.nodes)));
+        communities.sort_by_cached_key(|x| Reverse(stat_ref_weight(ref_weight, &x.nodes)));
     } else {
         // sort communities by weight from large to small
         communities.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
@@ -339,7 +339,7 @@ pub fn phase_communities(
     }
 
     // for c in &communities {
-    //     println!("{} {} {} {} {:?} {:?}", c.id, !invalid_ids.contains(&c.id), c.weight, c.nodes.len(), 
+    //     println!("{} {} {} {} {:?} {:?}", c.id, !invalid_ids.contains(&c.id), c.weight, c.nodes.len(),
     //         stat_ref_weight(&ref_weight.as_ref().unwrap(), &c.nodes), c.nodes);
     // }
     // panic!("");
@@ -364,7 +364,12 @@ fn init_graph(path: &str) -> HashMap<u32, HashMap<u32, f32>> {
             continue;
         }
         let lines: Vec<&str> = line.split_ascii_whitespace().collect();
-        insert_data(&mut data, u32::from_str(lines[1]).unwrap(), u32::from_str(lines[2]).unwrap(), f32::from_str(lines[3]).unwrap());
+        insert_data(
+            &mut data,
+            u32::from_str(lines[1]).unwrap(),
+            u32::from_str(lines[2]).unwrap(),
+            f32::from_str(lines[3]).unwrap(),
+        );
     }
     data
 }

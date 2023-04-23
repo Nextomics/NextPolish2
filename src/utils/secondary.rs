@@ -5,7 +5,8 @@ use fxhash::FxHashSet as HashSet;
 use rust_htslib::bam::{self, IndexedReader, Read, Record};
 use std::str::FromStr;
 
-fn retrieve_secondary_ids(path: &str, thread: usize) -> HashSet<Vec<u8>> {//TODO only retrieve secondary ids from opt.genome
+fn retrieve_secondary_ids(path: &str, thread: usize) -> HashSet<Vec<u8>> {
+    //TODO only retrieve secondary ids from opt.genome
     thread::scope(|work| {
         let (in_s, in_r) = bounded(thread + 1);
 

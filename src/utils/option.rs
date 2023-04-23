@@ -16,9 +16,9 @@ pub struct Option {
     pub yak: Vec<KmerInfo>,
     pub bam: String,
     pub fa: String,
-    pub model: String,           //-m
-    pub uppercase: bool,         //-u
-    pub out_pos: bool,           
+    pub model: String,   //-m
+    pub uppercase: bool, //-u
+    pub out_pos: bool,
     pub min_kmer_count: u16,     //-k
     pub thread: usize,           //-t
     pub iter_count: usize,       //-i
@@ -210,7 +210,11 @@ impl Option {
     fn update(self, mut args: ArgMatches) -> Option {
         //safely unwrap, becasue the default values have been set
         let min_map_len = args.remove_one::<f32>("min_map_len").unwrap();
-        let mut yaks: Vec<KmerInfo> = args.remove_many::<String>("yak").expect("Missing yak file!").map(|x| KmerInfo::new(&x)).collect();
+        let mut yaks: Vec<KmerInfo> = args
+            .remove_many::<String>("yak")
+            .expect("Missing yak file!")
+            .map(|x| KmerInfo::new(&x))
+            .collect();
         yaks.sort_by_key(|k| k.ksize);
 
         Option {
