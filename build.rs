@@ -23,23 +23,31 @@ fn get_git_version() -> String {
 
 fn build_yak() {
     let c_dir = PathBuf::from("./yak");
-    for file in (c_dir.read_dir().expect("failed to read dir")).flatten() {
-        let fpath = file.path();
-        if fpath
-            .extension()
-            .map_or_else(|| true, |x| x != "o" && x != "a")
-        {
-            println!("cargo:rerun-if-changed={:?}", fpath);
+    let mut has_yak = false;
+    if let Ok(iter_files) = c_dir.read_dir(){
+        for file in iter_files.flatten(){
+            let fpath = file.path();
+            if fpath
+                .extension()
+                .map_or_else(|| true, |x| x != "o" && x != "a")
+            {
+                println!("cargo:rerun-if-changed={:?}", fpath);
+            }
+            if !has_yak{
+                has_yak = true;
+            }
         }
     }
 
-    let output = Command::new("make")
-        .arg("all")
-        .current_dir(&c_dir)
-        .output()
-        .expect("failed to execute process");
-    if !output.status.success() {
-        panic!("make error: {}", String::from_utf8_lossy(&output.stderr));
+    if has_yak {
+        let output = Command::new("make")
+            .arg("all")
+            .current_dir(&c_dir)
+            .output()
+            .expect("failed to execute process");
+        if !output.status.success() {
+            panic!("make error: {}", String::from_utf8_lossy(&output.stderr));
+        }
     }
 }
 
