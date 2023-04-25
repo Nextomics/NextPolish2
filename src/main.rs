@@ -839,6 +839,17 @@ fn fill_order_stat(
     (max1_c, max1_p, max2_c, max2_p)
 }
 
+fn no_dupseq_lqseq(lqseq: &LqSeqs) -> bool {
+    for (p1, seq1) in lqseq.seqs.iter().enumerate().skip(1) {//exclude ref lqseq, becasue ref is from reads
+        for seq2 in &lqseq.seqs[p1 + 1 ..]{
+            if seq1.seq == seq2.seq {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
     let mut stats = [0; LQSEQ_MAX_CAN_COUNT];
     let mut order_stat = HashMap::default();
@@ -853,7 +864,7 @@ fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
 
         assert_eq!(lqseq.seqs[0].order, 0, "the first lqseq is not ref.");
 
-        // make sure the lqseq from ref will be saved, here *v/c > 1 is to avoid switch err.
+        // make sure the lqseq from ref will be saved, here *v|c > 1 is to avoid switch err.
         if let Some(v) = order_stat.get_mut(&0) {
             if *v > 1 && *v < min_c {
                 *v = min_c;
@@ -869,9 +880,13 @@ fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
             }
         }
 
-        if max1_p != 0 && max1_c < min_c && max1_c > 1 {
+        if max1_p != 0 && max1_c < min_c && (max1_c > 1 || no_dupseq_lqseq(&lqseq)) {
             // ln case max1_p is the only correct kmer.
+            // `no_dupseq_lqseq` for long lqseqs, which usually has a count of 1
             *order_stat.get_mut(&lqseq.seqs[max1_p].order).unwrap() = min_c;
+            order_stat.entry(0).and_modify(|x| *x = min_c).or_insert(min_c);//in case max1_p is not correct
+        }else if max1_c < min_c {
+            order_stat.entry(0).and_modify(|x| *x = min_c).or_insert(min_c);//in case sudoseed is not correct
         }
 
         lqseq.retain_sort_seqs(&order_stat, min_c);
