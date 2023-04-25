@@ -6,7 +6,6 @@ Telomere-to-telomere (T2T) genome has been emerging as a new hotspot in the fiel
 
 - [Installation](#install)
 - [General usage](#usage)
-- [Algorithm overview](#algorithm)
 - [Getting help](#help)
 - [Citation](#cite)
 - [License](#license)
@@ -78,10 +77,6 @@ samtools index hifi.map.sort.bam
 #### More options
 
 Use `./target/release/nextPolish2 -h` to see options.
-
-### <a name="algorithm"></a>Algorithm overview
-
-Coming soon...
 
 ### <a name="help"></a>Getting help
 
