@@ -37,7 +37,7 @@ cd test && bash hh.sh
 
 ### <a name="usage"></a>General usage
 
-NextPolish2 takes a genome assembly file, a HiFi mapping file and one or more k-mer dataset files as input and generates the polished genome.
+NextPolish2 takes a genome assembly file, a HiFi mapping file and one or more k-mer dataset files from short reads as input and generates the polished genome.
 
 1. Prepare HiFi mapping file ([winnowmap](https://github.com/marbl/Winnowmap) or [minimap2](https://github.com/lh3/minimap2/)).
 
