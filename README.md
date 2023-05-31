@@ -16,21 +16,26 @@ Telomere-to-telomere (T2T) genome has been emerging as a new hotspot in the fiel
 
 ### <a name="install"></a>Installation
 
-#### Dependencies
+#### Installing from bioconda
+```sh
+conda install nextpolish2
+```
+#### Installing from source
+##### Dependencies
 
 `NextPolish2` is written in rust, try below commands (no root required) or refer [here](https://www.rust-lang.org/tools/install) to install `Rust` first.
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-#### Download and install
+##### Download and install
 
 ```sh
 git clone --recursive git@github.com:Nextomics/NextPolish2.git
 cd NextPolish2 && cargo build --release
 ```
 
-#### Test
+##### Test
 
 ```sh
 cd test && bash hh.sh
