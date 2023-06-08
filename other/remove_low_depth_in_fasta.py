@@ -35,7 +35,7 @@ def out_high_depth_regions(depths, name, seq, min_depth, min_length):
         if e - s + 1 >= min_length:
             print(">%s_%d_%d\n%s" % (name, s, e + 1, seq[s : e + 1]))
             total_valid += e - s + 1
-    print("output rate in %s: %.2f" % (name, total_valid/len(seq)), file=sys.stderr())
+    print("output rate in %s: %.3f%%" % (name, 100 * total_valid/len(seq)), file=sys.stderr)
 
 def worker(args):
     name, start, end, bamfile = args #end is not include
@@ -50,11 +50,11 @@ def worker(args):
     return depth
 
 def main(args):
-    for name, seq in read_fa(args.fafile):
+    for name, seq in read_fa(args.genome):
         pool = Pool(args.thread)
         batch_len = int(len(seq)/args.thread) + 1
         batch_len_regions = []
-        for depth in pool.imap(worker, [(name, batch_len * i, batch_len * (i + 1), args.bamfile) for i in range(args.thread)]):
+        for depth in pool.imap(worker, [(name, batch_len * i, batch_len * (i + 1), args.bam) for i in range(args.thread)]):
             batch_len_regions.append(depth)
         out_high_depth_regions(batch_len_regions, name, seq, args.min_depth, args.min_len)
 
@@ -67,15 +67,14 @@ remove_low_depth_in_fasta:
     indels in bam does not affect filtering, because the mapping 
     depth is accumulated by the regions of alignments spanned.
 
-
 exmples: 
     %(prog)s sgs.map.sort.bam genome.fa > genome.filter.fa
 
 '''
-    )   
+    )
     parser.add_argument('-v', '--version', action='version', version='0.1')
     parser.add_argument('bam', 
-        help='read-to-ref mapping file in sorted BAM format.')
+        help='read-to-ref mapping file in sorted BAM format, index is required.')
     parser.add_argument('genome',
         help='genome assembly file in [GZIP] FASTA format.')
     parser.add_argument('-t', '--thread', metavar = 'INT', type=int, default=5,
