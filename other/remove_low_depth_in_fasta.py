@@ -50,8 +50,8 @@ def worker(args):
     return depth
 
 def main(args):
+    pool = Pool(args.thread)
     for name, seq in read_fa(args.genome):
-        pool = Pool(args.thread)
         batch_len = int(len(seq)/args.thread) + 1
         batch_len_regions = []
         for depth in pool.imap(worker, [(name, batch_len * i, batch_len * (i + 1), args.bam) for i in range(args.thread)]):
