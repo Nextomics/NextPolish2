@@ -728,41 +728,41 @@ fn display_lqseqs_vec(lqseqs: &[LqSeqs]) {
     }
 }
 
-fn retrieve_kmer_count(lqseqs: &mut [LqSeqs], kmer_info: &KmerInfo, min_kmer_count: u16) {
+fn retrieve_kmer_count(lqseqs: &mut [LqSeqs], kmer_info: &mut KmerInfo, min_kmer_count: u16) {
+    kmer_info.clear();
     let ksize = kmer_info.ksize as usize;
-    let mut kmer_hash: HashMap<u64, u16> = HashMap::default();
     for lqseq in lqseqs.iter() {
         for seq in &lqseq.seqs {
             // for lqseqs with length > ksize
             if seq.seq.len() > ksize {
                 for kmer in iter2kmer(seq.seq.chars().map(|x| x as u8), ksize) {
-                    kmer_hash.insert(kmer_info.to_dump_key(kmer), 0);
+                    kmer_info.insert(kmer_info.to_hash(kmer), true);
                 }
             } else if seq.kmer != INVALID_KMER {
-                kmer_hash.insert(seq.kmer, 0);
+                kmer_info.insert(seq.kmer, true);
             }
         }
     }
 
-    kmer_info.retrieve_kmers_count_from_dump(&mut kmer_hash);
+    kmer_info.retrieve_kmers(min_kmer_count);
 
     for lqseq in lqseqs.iter_mut() {
         for seq in &mut lqseq.seqs {
             if seq.seq.len() > ksize {
                 seq.kscore = iter2kmer(seq.seq.chars().map(|x| x as u8), ksize)
                     .map(|x| {
-                        let kmer = kmer_info.to_dump_key(x);
-                        kmer_hash
-                            .get(&kmer)
-                            .map_or(0, |&v| if v <= min_kmer_count { 0 } else { v })
+                        let kmer = kmer_info.to_hash(x);
+                        kmer_info
+                            .get(kmer)
+                            .unwrap_or(0)
                     })
                     .min()
                     .unwrap_or(0);
             } else if seq.kmer != INVALID_KMER {
                 seq.kscore =
-                    kmer_hash
-                        .get(&seq.kmer)
-                        .map_or(0, |&v| if v <= min_kmer_count { 0 } else { v });
+                    kmer_info
+                        .get(seq.kmer)
+                        .unwrap_or(0);
             }
         }
     }
@@ -1050,7 +1050,7 @@ fn update_consensus_with_lqseqs(
 fn reupdate_consensus_with_lqseqs(
     lqseqs: &mut [LqSeqs],
     consensus: Vec<ConsensusBase>,
-    kmer_info: &KmerInfo,
+    kmer_info: &mut KmerInfo,
     min_kmer_count: u16,
     iter_count: usize,
 ) -> Vec<ConsensusBase> {
@@ -1165,8 +1165,8 @@ fn reupdate_consensus_with_lqseqs(
         iter
     }
 
+    kmer_info.clear();
     let ksize = kmer_info.ksize as usize;
-    let mut kmer_hash: HashMap<u64, u16> = HashMap::default();
     let rech_idxs = lqseqs
         .iter()
         .enumerate()
@@ -1219,7 +1219,7 @@ fn reupdate_consensus_with_lqseqs(
                         .chain(consensus[si_r..ei_r].iter().map(|x| x.base as u8)),
                     ksize,
                 ) {
-                    kmer_hash.insert(kmer_info.to_dump_key(kmer), 0);
+                    kmer_info.insert(kmer_info.to_hash(kmer), true);
                 }
             }
         } else {
@@ -1247,14 +1247,14 @@ fn reupdate_consensus_with_lqseqs(
                     ei_r,
                 );
                 for kmer in iter2kmer(iter, ksize) {
-                    kmer_hash.insert(kmer_info.to_dump_key(kmer), 0);
+                    kmer_info.insert(kmer_info.to_hash(kmer), true);
                 }
             }
         }
         sj = ej;
     }
 
-    kmer_info.retrieve_kmers_count_from_dump(&mut kmer_hash);
+    kmer_info.retrieve_kmers(min_kmer_count);
 
     idx = 0;
     sj = 0;
@@ -1296,10 +1296,10 @@ fn reupdate_consensus_with_lqseqs(
                     ksize,
                 )
                 .map(|x| {
-                    let kmer = kmer_info.to_dump_key(x);
-                    kmer_hash
-                        .get(&kmer)
-                        .map_or(0, |&v| if v <= min_kmer_count { 0 } else { v })
+                    let kmer = kmer_info.to_hash(x);
+                    kmer_info
+                        .get(kmer)
+                        .unwrap_or(0)
                 })
                 .min()
                 .unwrap_or(0);
@@ -1331,10 +1331,10 @@ fn reupdate_consensus_with_lqseqs(
                 );
                 let kscore = iter2kmer(iter, ksize)
                     .map(|x| {
-                        let kmer = kmer_info.to_dump_key(x);
-                        kmer_hash
-                            .get(&kmer)
-                            .map_or(0, |&v| if v <= min_kmer_count { 0 } else { v })
+                        let kmer = kmer_info.to_hash(x);
+                        kmer_info
+                            .get(kmer)
+                            .unwrap_or(0)
                     })
                     .min()
                     .unwrap_or(0);
@@ -1413,12 +1413,12 @@ fn generate_lqseqs_from_tags_kmer(
     alignseqs: &mut [AlignSeq],
     mut lqseqs: Vec<LqSeqs>,
     consensus: Vec<ConsensusBase>,
-    opt: &Opt,
+    opt: &mut Opt,
     out_cns: bool,
 ) -> Option<Vec<ConsensusBase>> {
     let mut align_bases: Vec<AlignBase> = Vec::with_capacity(1_000_000);
 
-    let kmer_info = &opt.yak[0];
+    let kmer_info = &mut opt.yak[0];
     let ksize = kmer_info.ksize as u64;
     let shift: u64 = 2 * (ksize - 1);
     let mask: u64 = (1 << (2 * ksize)) - 1;
@@ -1502,7 +1502,7 @@ fn generate_lqseqs_from_tags_kmer(
                     order: idx as u32,
                     kscore: 0,
                     kmer: if kmer != INVALID_KMER {
-                        kmer_info.to_dump_key(kmer)
+                        kmer_info.to_hash(kmer)
                     } else {
                         INVALID_KMER
                     },
@@ -1520,7 +1520,7 @@ fn generate_lqseqs_from_tags_kmer(
         let mut consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_SUCC);
 
         // display_lqseqs_vec(&lqseqs);
-        for (p, kmer_info) in opt.yak.iter().enumerate() {
+        for (p, kmer_info) in opt.yak.iter_mut().enumerate() {
             consensus = reupdate_consensus_with_lqseqs(
                 &mut lqseqs,
                 consensus,
@@ -1546,7 +1546,7 @@ fn generate_cns_from_best_score_lq<'a>(
     msas: &'a [Msa],
     alignseqs: &mut [AlignSeq],
     mut global_best_kmer: &'a Kmer,
-    opt: &Opt,
+    opt: &mut Opt,
     out_cns: bool,
 ) -> Option<Vec<ConsensusBase>> {
     let mut lqseqs: Vec<LqSeqs> = Vec::with_capacity(100);
@@ -1635,7 +1635,7 @@ fn generate_cns_from_best_score_lq<'a>(
 fn get_cns_from_align_tags(
     msas: &[Msa],
     alignseqs: &mut [AlignSeq],
-    opt: &Opt,
+    opt: &mut Opt,
     out_cns: bool,
 ) -> Option<Vec<ConsensusBase>> {
     let mut global_best_kmer: &Kmer = &Default::default();
@@ -1711,6 +1711,7 @@ fn main() {
                     let in_r = in_r.clone();
                     let ou_s = ou_s.clone();
                     let sec_seqs = &sec_seqs;
+                    let mut opt = opt.to_owned();
                     scoped.spawn(move |_| {
                         while let Ok((tid, tseq)) = in_r.recv() {
                             let mut aln = Alignment::new();
@@ -1809,11 +1810,11 @@ fn main() {
                                     break get_cns_from_align_tags(
                                         &msas,
                                         &mut alignseqs,
-                                        opt,
+                                        &mut opt,
                                         true,
                                     );
                                 } else {
-                                    get_cns_from_align_tags(&msas, &mut alignseqs, opt, false);
+                                    get_cns_from_align_tags(&msas, &mut alignseqs, &mut opt, false);
                                     clear_msas(&mut msas);
                                 }
                                 i += 1;
