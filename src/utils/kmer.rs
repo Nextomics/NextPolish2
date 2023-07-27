@@ -1,10 +1,12 @@
 //most of function were adopted from yak:https://github.com/lh3/yak
-use fxhash::FxHashMap as HashMap;
+use fxhash::FxHashSet as HashSet;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::BufReader;
 use std::io::Read;
 
 const YAK_MAGIC: &[u8] = "YAK\u{2}".as_bytes();
+const YAK_COUNTER_BITS: u32 = 10;
 
 pub const SEQ_NUM: [u8; 128] = [
     // translate ACGTU-NM to 01233456
@@ -19,12 +21,51 @@ pub const SEQ_NUM: [u8; 128] = [
     4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, //112-127
 ];
 
+
+
+#[derive(Clone, Debug)]
+struct Kmer {
+    hash: u64,
+}
+
+impl Hash for Kmer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kmer().hash(state);
+    }
+}
+
+impl PartialEq for Kmer {
+    fn eq(&self, other: &Self) -> bool {
+        self.kmer() == other.kmer()
+    }
+}
+
+impl Eq for Kmer {}
+
+impl Kmer {
+    fn new(hash: u64) -> Kmer {
+        Kmer {
+            hash
+        }
+    }
+
+    fn kmer(&self) -> u64 {
+        self.hash >> YAK_COUNTER_BITS
+    }
+
+    fn count(&self) -> u16 {
+        (self.hash & ((1 << YAK_COUNTER_BITS) - 1)) as u16
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct KmerInfo {
     pub ksize: u32,
-    l_pre: u32,
-    counter_bits: u32,
+    kmask: u64,
+    pre: u32,
+    pmask: u64,
     path: String,
+    sets: Vec<HashSet<Kmer>>
 }
 
 impl KmerInfo {
@@ -37,7 +78,7 @@ impl KmerInfo {
             YAK_MAGIC,
             "The input binary k-mer dump file is incompatible."
         );
-        let (ksize, l_pre, counter_bits) = unsafe {
+        let (ksize, pre, counter_bits) = unsafe {
             let (n1, n2, n3) = buffer[4..].align_to::<u32>();
             assert!(
                 n1.is_empty() && n3.is_empty() && n2.len() == 3,
@@ -46,41 +87,65 @@ impl KmerInfo {
             (n2[0], n2[1], n2[2])
         };
 
+        assert_eq!(counter_bits, YAK_COUNTER_BITS, "different YAK_COUNTER_BITS");
+
         KmerInfo {
             ksize,
-            l_pre,
-            counter_bits,
+            kmask: (1 << (2 * ksize as u64)) - 1,
+            pre,
+            pmask: (1 << pre as u64) - 1,
             path: path.to_string(),
+            sets: vec![HashSet::default(); 1 << pre],
         }
     }
 
-    pub fn to_dump_key(&self, kmer: u64) -> u64 {
+    pub fn to_hash(&self, kmer: u64) -> u64 {
         if self.ksize < 32 {
-            let mask: u64 = (1 << (2 * self.ksize as u64)) - 1;
-            yak_hash64(kmer, mask) >> self.counter_bits
+            //Here we don't hash kmers first, so it easier to convert kmers into seqs for debugging.
+            yak_hash64(kmer, self.kmask)
         } else {
             //for ksize >= 32, kmer has been hashed
-            kmer >> self.counter_bits
+            kmer
         }
     }
 
-    pub fn retrieve_kmers_count_from_dump(&self, map: &mut HashMap<u64, u16>) -> Vec<u32> {
+    //clear_count: set count as zero
+    pub fn insert(&mut self, hash: u64, clear_count: bool) -> bool {
+        self.sets[(hash & self.pmask) as usize].insert(Kmer::new(
+            if clear_count{
+                hash >> YAK_COUNTER_BITS << YAK_COUNTER_BITS
+            }else {
+                hash
+            }
+        ))
+    }
+
+    pub fn get(&self, hash: u64) -> Option<u16> {
+        self.sets[(hash & self.pmask) as usize].get(&Kmer::new(hash)).map(|x| x.count())
+    }
+
+    //return true if successfully replaced
+    pub fn replace(&mut self, hash: u64) -> bool {
+        self.sets[(hash & self.pmask) as usize].replace(Kmer::new(hash)).is_some()
+    }
+
+    pub fn retrieve_kmers(&mut self, min_count: u16) -> Vec<u32> {
         let f = File::open(&self.path).unwrap();
         let mut reader = BufReader::new(f);
         let mut buffer = [0; 16];
         reader.read_exact(&mut buffer).unwrap();
-        let max_count: u64 = (1 << self.counter_bits) - 1;
+        let max_count: u64 = (1 << YAK_COUNTER_BITS) - 1;
 
         let mut hist = vec![0; max_count as usize + 1];
-        for _i in 0..1 << self.l_pre {
+        for i in 0..1 << self.pre {
             let mut buffer = [0; 8];
             reader.read_exact(&mut buffer).unwrap();
-            // let capacity = u32::from_ne_bytes(buffer[..4].try_into().expect("Failed to parse capacity from the dump file header."));
             let size = u32::from_ne_bytes(
                 buffer[4..]
                     .try_into()
                     .expect("Failed to parse size from the dump file header."),
             );
+            let sets = &mut self.sets[i];
             let mut buffer = [0u8; std::mem::size_of::<u64>()];
             for _j in 0..size {
                 let res = reader.read_exact(&mut buffer);
@@ -89,20 +154,69 @@ impl KmerInfo {
                     _ => {}
                 }
                 res.expect("Failed to parse the dump file");
-                let kmer_count = u64::from_ne_bytes(buffer);
-                let (kmer, count) = (kmer_count >> self.counter_bits, kmer_count & max_count);
+                let hash = u64::from_ne_bytes(buffer);
+                let count = (hash & max_count) as u16;
                 hist[count as usize] += 1;
-                if let Some(x) = map.get_mut(&kmer) {
-                    //some kmer=>hash collisions here
-                    let count = count as u16;
-                    if *x < count {
-                        *x = count;
-                    }
+                if count < min_count{
+                    continue;
                 }
-                // println!("{:?} {:?}", kmer, count);
+                let kmer = Kmer::new(hash);
+                if sets.contains(&kmer){
+                    sets.replace(kmer);
+                }
             }
         }
         hist
+    }
+
+    pub fn load_kmers(&mut self, min_count: u16) -> Vec<u32> {
+        let f = File::open(&self.path).unwrap();
+        let mut reader = BufReader::new(f);
+        let mut buffer = [0; 16];
+        reader.read_exact(&mut buffer).unwrap();
+        let max_count: u64 = (1 << YAK_COUNTER_BITS) - 1;
+
+        let mut hist = vec![0; max_count as usize + 1];
+        for i in 0..1 << self.pre {
+            let mut buffer = [0; 8];
+            reader.read_exact(&mut buffer).unwrap();
+            let size = u32::from_ne_bytes(
+                buffer[4..]
+                    .try_into()
+                    .expect("Failed to parse size from the dump file header."),
+            );
+            let sets = &mut self.sets[i];
+            sets.reserve(size as usize);
+            let mut buffer = [0u8; std::mem::size_of::<u64>()];
+            for _j in 0..size {
+                let res = reader.read_exact(&mut buffer);
+                match res {
+                    Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                    _ => {}
+                }
+                res.expect("Failed to parse the dump file");
+                let hash = u64::from_ne_bytes(buffer);
+                let count = (hash & max_count) as u16;
+                hist[count as usize] += 1;
+                if count < min_count {
+                    continue;
+                }
+                let t = sets.insert(Kmer::new(hash));
+                assert_eq!(t,  true);
+            }
+        }
+        hist
+    }
+
+    //estimated kmer total count
+    pub fn estimated_len(&self) -> usize {
+        std::fs::metadata(&self.path).expect("failed to read read metadata").len() as usize / std::mem::size_of::<u64>()
+    }
+
+    pub fn clear(&mut self) {
+        for set in &mut self.sets{
+            set.clear();
+        }
     }
 }
 
