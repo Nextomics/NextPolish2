@@ -75,11 +75,11 @@ samtools index hifi.map.sort.bam
 ```sh
 ./target/release/nextPolish2 -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa
 
-# or try with -r, it usually produces better results for highly heterozygous or homozygous genomes.
+# or try with -r
 # ./target/release/nextPolish2 -r -t 5 hifi.map.sort.bam asm.fa.gz k21.yak k31.yak > asm.np2.fa
 ```
 
-***Note:*** If your genome is assembled via **trio binning**. You can discard reads that have different haplotype with the reference before the mapping procedure, which usually produces a better result, see [here](./doc/benchmark3.md) for an example.
+***Optional:*** If your genome is assembled via **trio binning**. You can discard reads that have different haplotype with the reference before the mapping procedure, see [here](./doc/benchmark3.md) for an example.
 
 #### More options
 
