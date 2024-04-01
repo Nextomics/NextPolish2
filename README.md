@@ -49,6 +49,7 @@ NextPolish2 takes a genome assembly file, a HiFi mapping file and one or more k-
 1. Prepare HiFi mapping file ([winnowmap](https://github.com/marbl/Winnowmap) or [minimap2](https://github.com/lh3/minimap2/)).
 
 ```sh
+#prefer using winnowmap
 meryl count k=15 output merylDB asm.fa.gz
 meryl print greater-than distinct=0.9998 merylDB > repetitive_k15.txt
 winnowmap -t 5 -W repetitive_k15.txt -ax map-pb asm.fa.gz hifi.fasta.gz|samtools sort -o hifi.map.sort.bam -
