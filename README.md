@@ -98,7 +98,7 @@ Use `./target/release/nextPolish2 -h` to see options.
 
 ### <a name="cite"></a>Citation
 
-Hu, J. et al. NextPolish2:a repeat-aware polishing tool for genomes assembled using HiFi long reads. bioRxiv 2023.04.26.538352 (2023) doi:10.1101/2023.04.26.538352.
+Jiang Hu, Zhuo Wang, Fan Liang, Shan-Lin Liu, Kai Ye, De-Peng Wang, NextPolish2: A Repeat-aware Polishing Tool for Genomes Assembled Using HiFi Long Reads, Genomics, Proteomics & Bioinformatics, 2024;, qzad009, https://doi.org/10.1093/gpbjnl/qzad009
 
 ### <a name="license"></a>License
 
