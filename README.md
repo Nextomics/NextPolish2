@@ -108,7 +108,7 @@ NextPolish2 is only freely available for academic use and other non-commercial u
 ### <a name="limit"></a>Limitations
 
 1. NextPolish2 can only correct the regions that are mapped by HiFi reads. For regions without HiFi reads mapping (usually cause by high error rate), you can try to adjust mapping parameters.
-2. The performance of NextPolish2 relies heavily on the quality of short reads.
+2. **The performance of NextPolish2 relies heavily on the quality of short reads. Please use high-quality short reads to avoid overcorrection errors, which can falsely improve estimated QV but reduce actual accuracy.**
 3. NextPolish2 can only fix some structural misassemblies.
 
 ### <a name="benchmark"></a>Benchmarking
