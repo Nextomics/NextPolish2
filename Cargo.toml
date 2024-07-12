@@ -25,3 +25,5 @@ tikv-jemallocator = "0.5"
 
 [profile.release]
 panic = 'abort'
+lto = true
+codegen-units = 1
