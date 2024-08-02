@@ -595,6 +595,15 @@ struct ConsensusBase {
     base: char,
 }
 
+fn seq2consensusbase_vec(seq: &str) -> Vec<ConsensusBase> {
+    seq.chars().enumerate().map(|(p, b)| 
+        ConsensusBase {
+            pos: p as u32,
+            base: b
+        }
+    ).collect()
+}
+
 fn display_consensusbase_vec(
     tid: &str,
     consensusbases: &[ConsensusBase],
@@ -1714,6 +1723,11 @@ fn main() {
                     let mut opt = opt.to_owned();
                     scoped.spawn(move |_| {
                         while let Ok((tid, tseq)) = in_r.recv() {
+                            if tseq.len() < opt.min_ctg_len {
+                                ou_s.send((tid, Some(seq2consensusbase_vec(&tseq)))).unwrap();
+                                continue;
+                            }
+
                             let mut aln = Alignment::new();
                             let mut alignseqs: Vec<AlignSeq> = Vec::with_capacity(65536);
                             let mut msas: Vec<Msa> = vec![Default::default(); tseq.len()];

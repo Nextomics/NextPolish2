@@ -23,6 +23,7 @@ pub struct Option {
     pub thread: usize,           //-t
     pub iter_count: usize,       //-i
     pub min_read_len: usize,     //-l
+    pub min_ctg_len: usize,      //-L
     pub use_supplementary: bool, //-s
     pub use_secondary: bool,     //-S
     pub use_all_reads: bool,     //-r
@@ -145,6 +146,15 @@ impl Option {
                     .help("filter reads with length <= INT."),
             )
             .arg(
+                Arg::new("min_ctg_len")
+                    .short('l')
+                    .long("min_ctg_len")
+                    .value_name("INT")
+                    .default_value(opt.min_ctg_len.to_string())
+                    .value_parser(value_parser!(usize))
+                    .help("don't correct reference sequences with length <= INT."),
+            )
+            .arg(
                 Arg::new("use_supplementary")
                     .short('s')
                     .long("use_supplementary")
@@ -231,6 +241,7 @@ impl Option {
             thread: args.remove_one::<usize>("thread").unwrap(),
             iter_count: args.remove_one::<usize>("iter_count").unwrap(),
             min_read_len: args.remove_one::<usize>("min_read_len").unwrap(),
+            min_ctg_len: args.remove_one::<usize>("min_ctg_len").unwrap(), 
             use_supplementary: args.get_flag("use_supplementary"),
             use_secondary: args.get_flag("use_secondary"),
             min_map_len: min_map_len as usize,
@@ -255,6 +266,7 @@ impl Default for Option {
             thread: 1,
             iter_count: 2,
             min_read_len: 1000,
+            min_ctg_len: 1000000,
             use_supplementary: false,
             use_secondary: false,
             use_all_reads: false,
