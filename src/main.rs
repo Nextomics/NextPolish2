@@ -859,7 +859,7 @@ fn no_dupseq_lqseq(lqseq: &LqSeqs) -> bool {
     true
 }
 
-fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
+fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs], max_indel_len: isize) {
     let mut stats = [0; LQSEQ_MAX_CAN_COUNT];
     let mut order_stat = HashMap::default();
 
@@ -900,8 +900,9 @@ fn fill_seed_lqseqs(lqseqs: &mut [LqSeqs]) {
 
         lqseq.retain_sort_seqs(&order_stat, min_c);
 
-        if lqseq.seqs.len() <= 1 {
-            if !lqseq.seqs.is_empty() {
+        let skip_long_lqseq = (lqseq.sudoseed.len() as isize - lqseq.seqs[0].seq.len() as isize ).abs() > max_indel_len;
+        if lqseq.seqs.len() <= 1 || skip_long_lqseq {
+            if !lqseq.seqs.is_empty() || skip_long_lqseq {
                 //IN case the sudoseed/lqseq is not from ref
                 lqseq.sudoseed.clear();
                 lqseq.sudoseed.push_str(&lqseq.seqs[0].seq);
@@ -1525,7 +1526,7 @@ fn generate_lqseqs_from_tags_kmer(
     // display_lqseqs_vec(&lqseqs);
     if out_cns {
         // display_lqseqs_vec(&lqseqs);
-        fill_seed_lqseqs(&mut lqseqs);
+        fill_seed_lqseqs(&mut lqseqs, opt.max_indel_len);
         let mut consensus = update_consensus_with_lqseqs(&lqseqs, consensus, LQSEQS_LABLE_SUCC);
 
         // display_lqseqs_vec(&lqseqs);
