@@ -23,6 +23,8 @@ pub struct Option {
     pub thread: usize,           //-t
     pub iter_count: usize,       //-i
     pub min_read_len: usize,     //-l
+    pub min_ctg_len: usize,      //-L
+    pub max_indel_len: isize,    //-n
     pub use_supplementary: bool, //-s
     pub use_secondary: bool,     //-S
     pub use_all_reads: bool,     //-r
@@ -145,6 +147,24 @@ impl Option {
                     .help("filter reads with length <= INT."),
             )
             .arg(
+                Arg::new("min_ctg_len")
+                    .short('l')
+                    .long("min_ctg_len")
+                    .value_name("INT")
+                    .default_value(opt.min_ctg_len.to_string())
+                    .value_parser(value_parser!(usize))
+                    .help("don't correct reference sequences with length <= INT."),
+            )
+            .arg(
+                Arg::new("max_indel_len")
+                    .short('n')
+                    .long("max_indel_len")
+                    .value_name("INT")
+                    .default_value(opt.max_indel_len.to_string())
+                    .value_parser(value_parser!(isize))
+                    .help("ignore indel errors with length > INT."),
+            )
+            .arg(
                 Arg::new("use_supplementary")
                     .short('s')
                     .long("use_supplementary")
@@ -231,6 +251,8 @@ impl Option {
             thread: args.remove_one::<usize>("thread").unwrap(),
             iter_count: args.remove_one::<usize>("iter_count").unwrap(),
             min_read_len: args.remove_one::<usize>("min_read_len").unwrap(),
+            min_ctg_len: args.remove_one::<usize>("min_ctg_len").unwrap(), 
+            max_indel_len: args.remove_one::<isize>("max_indel_len").unwrap(), 
             use_supplementary: args.get_flag("use_supplementary"),
             use_secondary: args.get_flag("use_secondary"),
             min_map_len: min_map_len as usize,
@@ -251,10 +273,12 @@ impl Default for Option {
             model: "ref".to_string(),
             uppercase: false,
             out_pos: false,
-            min_kmer_count: 1,
+            min_kmer_count: 5,
             thread: 1,
             iter_count: 2,
             min_read_len: 1000,
+            min_ctg_len: 1000000,
+            max_indel_len: 20,
             use_supplementary: false,
             use_secondary: false,
             use_all_reads: false,

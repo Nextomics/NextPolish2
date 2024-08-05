@@ -4,6 +4,8 @@
 
 Telomere-to-telomere (T2T) genome has been emerging as a new hotspot in the field of genomics. Typically, we obtain a T2T genome with datasets including both high-accuracy PacBio HiFi long reads and Oxford Nanopore Technologies (ONT) ultra-long reads. Although genomes obtained using HiFi long reads have considerably higher qualities, however, they still contain a handful of assembly errors in regions where HiFi long reads stumble as well, such as homopolymer or low-complexity microsatellite regions. Additionally, a typical gap-filling step is accomplished using ONT ultra long reads which contain a certain amount of errors. Hence, the current T2T genomes assembled still require further improvement in terms of consensus accuracy. NextPolish2 can be used to fix these errors (SNV/Indel) in a high quality assembly. Through the built-in phasing module, it can only correct the error bases while maintaining the original haplotype consistency. Therefore, even in the regions with complex repeat elements, NextPolish2 will still not produce overcorrections. In fact, in some cases it can reduce switching errors in the heterozygous region. NextPolish2 is not an upgraded version of NextPolish, but an additional supplement for the pursuit of extremely-high-quality genome assemblies.
 
+If you are concerned about the overcorrection problem, please refer to the [HG005 dataset benchmarking](#overcorrection) and the [NextPolish2 article](#cite) for more information.
+
 ## Table of Contents
 
 - [Installation](#install)
@@ -13,6 +15,7 @@ Telomere-to-telomere (T2T) genome has been emerging as a new hotspot in the fiel
 - [License](#license)
 - [Limitations](#limit)
 - [Benchmarking](#benchmark)
+- [Overcorrection](#overcorrection)
 - [FAQ](./doc/faq.md)
 
 ### <a name="install"></a>Installation
@@ -99,7 +102,7 @@ Use `./target/release/nextPolish2 -h` to see options.
 
 ### <a name="cite"></a>Citation
 
-Jiang Hu, Zhuo Wang, Fan Liang, Shan-Lin Liu, Kai Ye, De-Peng Wang, NextPolish2: A Repeat-aware Polishing Tool for Genomes Assembled Using HiFi Long Reads, Genomics, Proteomics & Bioinformatics, 2024;, qzad009, https://doi.org/10.1093/gpbjnl/qzad009
+Jiang Hu, Zhuo Wang, Fan Liang, Shan-Lin Liu, Kai Ye, De-Peng Wang, NextPolish2: A Repeat-aware Polishing Tool for Genomes Assembled Using HiFi Long Reads, Genomics, Proteomics & Bioinformatics, 2024, qzad009, https://doi.org/10.1093/gpbjnl/qzad009
 
 ### <a name="license"></a>License
 
@@ -125,6 +128,18 @@ NextPolish2 is only freely available for academic use and other non-commercial u
 |^(HG002, paternal contigs)^                       | NextPolish2        |**63.49**| **0.20**                |
 | [*H. sapiens*](./doc/benchmark3.md)              | Hifiasm  (trio)    | 59.78   | 0.33                    |
 |^(HG002, maternal contigs)^                       | NextPolish2        |**63.29**| **0.30**                |
+
+### <a name="overcorrection"></a>Overcorrection
+
+In addition to evaluating the overcorrection problem discussed in the [`NextPolish2` article](#cite), we used the HG005 data to further assess this issue. First, we assembled the HG005 genome with approximately 30x HiFi data using HiFiasm, followed by polishing the assembled genome with NextPolish2. To minimize the impact of evaluation method limitations, we employed three approaches to evaluate the genome's accuracy before and after polishing:
+
+1. **Merqury:** To assess the quality value (QV).
+2. **DeepVariant:** To count homozygous high-quality variants as potential errors.
+3. **Paftools.js:** To count variants between GRCh37 and HG005 that are not in the high-confidence benchmarking variants (GIAB) as potential errors.
+
+The results demonstrated that `NextPolish2` improved the QV of the assembled genome from 53.8544 to 55.6257 and reduced the number of homozygous high-quality variants (potential errors) from 14,155 to 6,955. Additionally, `NextPolish2` increased the number of high-quality variants called from 2,520,470 to 2,522,817 and reduced the error rate from 0.029927% to 0.029575%.
+
+Overall, these results indicate that `NextPolish2` effectively reduces the error rate of the assembled HG005 genome. Detailed step-by-step instructions are available [here](./doc/benchmark5.md).
 
 ### Star
 You can track updates by tab the **Star** button on the upper-right corner at the [github page](https://github.com/Nextomics/NextPolish2).
