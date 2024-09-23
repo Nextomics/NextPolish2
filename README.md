@@ -73,6 +73,7 @@ samtools index hifi.map.sort.bam
 # produce a 31-mer dataset, remove -b 37 if you want to count singletons
 ./yak/yak count -o k31.yak -k 31 -b 37 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz) 
 ```
+***Note:*** To maximize correction accuracy, quality filtering steps (fastp) such as adapter removal, global or quality trimming, and read filtering are essential for short reads.
 
 3. Run NextPolish2.
 
