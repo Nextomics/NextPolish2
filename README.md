@@ -67,13 +67,16 @@ samtools index hifi.map.sort.bam
 2. Prepare k-mer dataset files ([yak](https://github.com/lh3/yak)). Here we only produce 21-mer and 31-mer datasets, you can produce more k-mer datasets with different k-mer size.
 
 ```sh
+# Quality control and filtering.
+# fastp -5 -3 -n 0 -f 5 -F 5 -t 5 -T 5 -q 20 -i sr.R1.fastq.gz -I sr.R2.fastq.gz -o sr.R1.clean.fastq.gz -O sr.R2.clean.fastq.gz
+
 # produce a 21-mer dataset, remove -b 37 if you want to count singletons
-./yak/yak count -o k21.yak -k 21 -b 37 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz)
+./yak/yak count -o k21.yak -k 21 -b 37 <(zcat sr.R*.clean.fastq.gz) <(zcat sr.R*.clean.fastq.gz)
 
 # produce a 31-mer dataset, remove -b 37 if you want to count singletons
-./yak/yak count -o k31.yak -k 31 -b 37 <(zcat sr.R*.fastq.gz) <(zcat sr.R*.fastq.gz) 
+./yak/yak count -o k31.yak -k 31 -b 37 <(zcat sr.R*.clean.fastq.gz) <(zcat sr.R*.clean.fastq.gz) 
 ```
-***Note:*** To maximize correction accuracy, quality filtering steps (fastp) such as adapter removal, global or quality trimming, and read filtering are essential for short reads.
+***Important:*** To maximize correction accuracy, quality filtering steps (fastp) such as adapter removal, global or quality trimming, and read filtering are essential for short reads.
 
 3. Run NextPolish2.
 
