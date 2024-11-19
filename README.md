@@ -64,7 +64,7 @@ winnowmap -t 5 -W repetitive_k15.txt -ax map-pb asm.fa.gz hifi.fasta.gz|samtools
 samtools index hifi.map.sort.bam
 ```
 
-2. Prepare k-mer dataset files ([yak](https://github.com/lh3/yak)). Here we only produce 21-mer and 31-mer datasets, you can produce more k-mer datasets with different k-mer size.
+2. Prepare k-mer dataset files ([yak](https://github.com/lh3/yak)) (We recommend using >=60X short reads). Here we only produce 21-mer and 31-mer datasets, you can produce more k-mer datasets with different k-mer size.
 
 ```sh
 # Quality control and filtering.
