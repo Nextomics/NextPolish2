@@ -22,7 +22,7 @@ If you are concerned about the overcorrection problem, please refer to the [HG00
 
 #### Installing from bioconda
 ```sh
-conda install nextpolish2
+conda install bioconda::nextpolish2
 ```
 #### Installing from source
 ##### Dependencies
