@@ -148,7 +148,7 @@ impl Option {
             )
             .arg(
                 Arg::new("min_ctg_len")
-                    .short('l')
+                    .short('L')
                     .long("min_ctg_len")
                     .value_name("INT")
                     .default_value(opt.min_ctg_len.to_string())
