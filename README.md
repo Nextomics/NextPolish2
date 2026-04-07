@@ -35,7 +35,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ##### Download and install
 
 ```sh
-git clone --recursive git@github.com:Nextomics/NextPolish2.git
+git clone --recursive https://github.com/Nextomics/NextPolish2.git
 cd NextPolish2 && cargo build --release
 ```
 
