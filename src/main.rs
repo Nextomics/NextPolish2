@@ -810,6 +810,14 @@ fn get_min_count(c: usize) -> usize {
     }
 }
 
+fn get_min_count1(c: usize) -> usize {
+    if c >= 9 {
+        5
+    } else {
+        3
+    }
+}
+
 fn fill_order_stat(
     lqseq: &LqSeqs,
     stats: &mut [usize],
@@ -919,15 +927,15 @@ fn mark_hete_lqseqs(lqseqs: &mut [LqSeqs]) {
 
     for lqseq in lqseqs.iter_mut() {
         let (max1_c, max1_p, max2_c, max2_p) = fill_order_stat(lqseq, &mut stats, &mut order_stat);
-        let min_c = get_min_count(lqseq.seqs.len());
+        let min_c = get_min_count1(lqseq.seqs.len());
 
-        if max2_c >= min_c
-            && (lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()
-                || (lqseq.seqs.len() >= 6 && max2_c >= max1_c / 2))
-            && is_valid_snp(
-                lqseq.seqs[max1_p].seq.as_bytes(),
-                lqseq.seqs[max2_p].seq.as_bytes(),
-            )
+        if max2_c >= min_c && lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()
+            // && (lqseq.seqs[max1_p].seq.len() == lqseq.seqs[max2_p].seq.len()
+            //     || (lqseq.seqs.len() >= 6 && max2_c >= max1_c / 2))
+            // && is_valid_snp(
+            //     lqseq.seqs[max1_p].seq.as_bytes(),
+            //     lqseq.seqs[max2_p].seq.as_bytes(),
+            // )
         {
             lqseq.set_lable(LQSEQS_LABLE_HETE);
 
